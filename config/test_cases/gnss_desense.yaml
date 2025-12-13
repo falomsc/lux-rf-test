@@ -1,0 +1,153 @@
+test_info:
+  name: "GNSS Desense Test"
+  description: "GNSS灵敏度降低测试 - 各种干扰条件下的GNSS性能评估"
+  version: "1.0.0"
+
+# 设备配置
+device:
+  device_id: "bdb12599"
+  zt_log_dir: "/sdcard/hmbletool/"
+  local_log_dir: "./output/logs/gnss_desense"
+
+# 测试参数
+test_params:
+  pos_scan_interval: 30          # 定位扫描间隔（秒）
+  term_log_interval: 60          # terminal log导出间隔（秒）
+  reboot_time: 60                # 重启等待时间（秒）
+  default_duration: 30           # 默认测试持续时间（秒）
+
+# GNSS定位命令
+pos_cmd:
+  - "hm:gnss+proc=open"
+  - "hm:gnss+proc=read_auto"
+
+# 重启命令
+reboot_cmd: "hm:sft+power=reboot"
+
+# 测试的GNSS模式: gps, bds, gal, gln
+gnss_modes:
+  - gps
+  - bds
+  - gal
+  - gln
+
+# 日志导出格式: json, xlsx, dashboard
+log_formats:
+  - json
+  - xlsx
+
+# 测试用例定义
+testing_cases:
+  black_screen:
+    description: "黑屏状态下的GNSS性能测试"
+    start_cmd: ""
+    end_cmd: ""
+    start_delay: 20
+    need_reboot: false
+    duration: 30
+    log_prefix: "black_screen"
+    enabled: true
+
+  white_screen:
+    description: "白屏最大亮度下的GNSS性能测试"
+    start_cmd:
+      - "hm:ht+cmd=ht,lcd,brightness,level:100"
+      - "hm:ht+cmd=ht,lcd,show,color:16777215"
+    end_cmd: ""
+    start_delay: 0
+    need_reboot: false
+    duration: 30
+    log_prefix: "white_screen"
+    enabled: true
+
+  watch_face:
+    description: "表盘秒针刷新时的GNSS性能测试"
+    start_cmd: "hm:ht+cmd=ht,ui,seconds,switch:on"
+    end_cmd: "hm:ht+cmd=ht,ui,seconds,switch:off"
+    start_delay: 0
+    need_reboot: false
+    duration: 30
+    log_prefix: "watch"
+    enabled: false
+
+  screen_refresh:
+    description: "屏幕高刷新率下的GNSS性能测试"
+    start_cmd: "hm:ht+cmd=ht,lcd,refresh,time:50"
+    end_cmd: ""
+    start_delay: 0
+    need_reboot: true
+    duration: 30
+    log_prefix: "screen_refresh"
+    enabled: false
+
+  motor:
+    description: "马达振动时的GNSS性能测试"
+    start_cmd: "hm:ht+cmd=ht,motor,start"
+    end_cmd: "hm:ht+cmd=ht,motor,stop"
+    start_delay: 0
+    need_reboot: false
+    duration: 30
+    log_prefix: "motor"
+    enabled: false
+
+  psram:
+    description: "PSRAM读写时的GNSS性能测试"
+    start_cmd: "hm:ht+cmd=ht,storage,start,type:psram"
+    end_cmd: "hm:ht+cmd=ht,storage,stop,type:psram"
+    start_delay: 0
+    need_reboot: true
+    duration: 600
+    log_prefix: "psram"
+    enabled: false
+
+  emmc:
+    description: "eMMC读写时的GNSS性能测试"
+    start_cmd: "hm:ht+cmd=ht,storage,start,type:emmc"
+    end_cmd: "hm:ht+cmd=ht,storage,stop,type:emmc"
+    start_delay: 0
+    need_reboot: true
+    duration: 300
+    log_prefix: "emmc"
+    enabled: false
+
+  norflash:
+    description: "NOR Flash读写时的GNSS性能测试"
+    start_cmd: "hm:ht+cmd=ht,storage,start,type:norflash"
+    end_cmd: "hm:ht+cmd=ht,storage,stop,type:norflash"
+    start_delay: 0
+    need_reboot: true
+    duration: 300
+    log_prefix: "norflash"
+    enabled: false
+
+  ppg:
+    description: "PPG传感器工作时的GNSS性能测试"
+    start_cmd:
+      - "hm:ht+cmd=ht,sensor,set,type:ppg,caloff:1,curr:200,dac:0"
+      - "hm:ht+cmd=ht,sensor,enable,type:ppg"
+    end_cmd: "hm:ht+cmd=ht,sensor,disable,type:ppg"
+    start_delay: 0
+    need_reboot: false
+    duration: 30
+    log_prefix: "ppg"
+    enabled: false
+
+  audio:
+    description: "音频播放时的GNSS性能测试"
+    start_cmd: "hm:ht+cmd=ht,audio,start,name:/system/audio/Hwtest.mp3,vol:90"
+    end_cmd: "hm:ht+cmd=ht,audio,stop,name:/system/audio/Hwtest.mp3,vol:90"
+    start_delay: 0
+    need_reboot: false
+    duration: 30
+    log_prefix: "audio"
+    enabled: false
+
+  mic:
+    description: "麦克风录音时的GNSS性能测试"
+    start_cmd: "hm:ht+cmd=ht,mic,start"
+    end_cmd: "hm:ht+cmd=ht,mic,stop"
+    start_delay: 0
+    need_reboot: false
+    duration: 30
+    log_prefix: "mic"
+    enabled: false

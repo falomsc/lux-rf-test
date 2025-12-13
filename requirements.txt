@@ -1,0 +1,5 @@
+pyvisa
+openpyxl
+pyyaml
+uiautomator2
+pynmea2

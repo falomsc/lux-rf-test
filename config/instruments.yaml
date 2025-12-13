@@ -1,0 +1,11 @@
+n9020a:
+  resource: "TCPIP::192.168.10.21::INSTR"
+  timeout: 20000
+  sending_interval: 0.05
+  write_termination: "\n"
+  read_termination: "\n"
+
+cmw500:
+  resource: "TCPIP::192.168.10.10::INSTR"
+  timeout: 30000
+  sending_interval: 0.1

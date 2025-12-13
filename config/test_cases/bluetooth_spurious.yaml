@@ -1,0 +1,95 @@
+test_name: "Bluetooth Spurious Emission Test"
+description: "BLE spurious emission measurement per regulatory requirements"
+
+test:
+  channel: 39
+  screenshots_folder: "C:/screenshots/ble"
+
+bands:
+  - name: "30MHz_1000MHz"
+    start_hz: 30.0e+6
+    stop_hz: 1000.0e+6
+    offset_db: 1.5
+    rbw_hz: 100.0e+3
+    limit_dbm: -36
+
+  - name: "1GHz_12.75GHz"
+    start_hz: 1.0e+9
+    stop_hz: 12.75e+9
+    offset_db: 1.5
+    rbw_hz: 1.0e+6
+    limit_dbm: -30
+
+  - name: "48.5MHz_72.5MHz"
+    start_hz: 48.5e+6
+    stop_hz: 72.5e+6
+    offset_db: 1.5
+    rbw_hz: 100.0e+3
+    limit_dbm: -54
+
+  - name: "76MHz_118MHz"
+    start_hz: 76.0e+6
+    stop_hz: 118.0e+6
+    offset_db: 1.5
+    rbw_hz: 100.0e+3
+    limit_dbm: -54
+
+  - name: "167MHz_223MHz"
+    start_hz: 167.0e+6
+    stop_hz: 223.0e+6
+    offset_db: 1.5
+    rbw_hz: 100.0e+3
+    limit_dbm: -54
+
+  - name: "470MHz_702MHz"
+    start_hz: 470.0e+6
+    stop_hz: 702.0e+6
+    offset_db: 1.5
+    rbw_hz: 100.0e+3
+    limit_dbm: -54
+
+  - name: "2300MHz_2380MHz"
+    start_hz: 2300.0e+6
+    stop_hz: 2380.0e+6
+    offset_db: 1.5
+    rbw_hz: 1.0e+6
+    limit_dbm: -40
+
+  - name: "2380MHz_2390MHz"
+    start_hz: 2380.0e+6
+    stop_hz: 2390.0e+6
+    offset_db: 1.5
+    rbw_hz: 100.0e+3
+    limit_dbm: -40
+
+  - name: "2390MHz_2400MHz"
+    start_hz: 2390.0e+6
+    stop_hz: 2400.0e+6
+    offset_db: 1.5
+    rbw_hz: 100.0e+3
+    limit_dbm: -30
+
+  - name: "2483.5MHz_2500MHz"
+    start_hz: 2483.5e+6
+    stop_hz: 2500.0e+6
+    offset_db: 1.5
+    rbw_hz: 1.0e+6
+    limit_dbm: -40
+
+  - name: "5150MHz_5350MHz"
+    start_hz: 5150.0e+6
+    stop_hz: 5350.0e+6
+    offset_db: 1.5
+    rbw_hz: 1.0e+6
+    limit_dbm: -40
+
+  - name: "5725MHz_5850MHz"
+    start_hz: 5725.0e+6
+    stop_hz: 5850.0e+6
+    offset_db: 1.5
+    rbw_hz: 1.0e+6
+    limit_dbm: -40
+
+# 排除频段（蓝牙工作频段）
+exclude:
+  - [2.4e+9, 2.48e+9]
