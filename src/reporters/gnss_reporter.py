@@ -15,7 +15,7 @@ from openpyxl.utils import get_column_letter
 from src.reporters.base_reporter import BaseReporter
 from src.utils.logger import get_logger
 
-logger = get_logger(__name__)
+logger = get_logger()
 
 
 class GNSSReporter(BaseReporter):

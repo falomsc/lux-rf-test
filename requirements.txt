@@ -3,3 +3,4 @@ openpyxl
 pyyaml
 uiautomator2
 pynmea2
+pytest

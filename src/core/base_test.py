@@ -17,7 +17,6 @@ class TestResult:
 
 class BaseTest(ABC):
     """所有测试的基类"""
-
     def __init__(self, config: dict[str, Any]):
         self.config = config
         self.results: list[dict] = []

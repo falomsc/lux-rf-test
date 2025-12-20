@@ -7,7 +7,11 @@ from src.core.exceptions import ConfigError
 
 
 def load_config(filepath: str) -> dict[str, Any]:
-    """加载YAML配置文件"""
+    """
+    读取 YAML 配置
+    :param filepath:
+    :return:
+    """
     if not os.path.exists(filepath):
         raise ConfigError(f"配置文件不存在: {filepath}")
 

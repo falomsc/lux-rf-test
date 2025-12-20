@@ -1,8 +1,9 @@
 """
-GNSS 日志解析模块
-支持 NMEA 和 Terminal 日志的解析
+Terminal log 解析得到 TermGNSSRecord
+NEMA log 解析得到 NMEARecord
+需要转换成 GNSSRecord 进行统计分析
+TODO 缺少方法将 TermGNSSRecord 转换成 GNSSRecord
 """
-
 import re
 from datetime import datetime, time as dt_time
 from typing import Literal, Sequence, Optional, TypedDict
@@ -11,12 +12,9 @@ import pynmea2
 
 from src.utils.logger import get_logger
 
-logger = get_logger(__name__)
+logger = get_logger()
 
-# 类型定义
 AllowedMode = Literal["gps", "bds", "gal", "gln"]
-
-# Talker ID 到 GNSS 模式的映射
 TALKER_TO_MODE: dict[str, AllowedMode] = {
     "GP": "gps",
     "GL": "gln",
@@ -70,6 +68,10 @@ class NMEARecord(TypedDict):
     vdop: float
     status: str
     gsv_infos: dict[str, list[NMEASat]]
+    '''
+    "gsv_infos": {"gps_gsv": [gps_nmea_sat1, gps_nmea_sat2, ...], "glo_gsv": [glo_nmea_sat1, glo_nmea_sat2, ...],
+    "gal_gsv": [gal_nmea_sat1, gal_nmea_sat2, ...], "bds_gsv": [bds_nmea_sat1, bds_nmea_sat2, ...]}
+    '''
 
 
 class GsvInfo(TypedDict):
@@ -87,6 +89,13 @@ class GNSSRecord(TypedDict):
     bds_gsv: GsvInfo
     gal_gsv: GsvInfo
     gln_gsv: GsvInfo
+    '''
+    "overall": {"top4_cn": float, "sats": [top4_sat1, top4_sat2, top4_sat3, top4_sat4]},
+    "gps_gsv": {"top4_cn": float, "sats": [top4_gps_sat1, top4_gps_sat2, top4_gps_sat3, top4_gps_sat4]},
+    "bds_gsv": {"top4_cn": float, "sats": [top4_bds_sat1, top4_bds_sat2, top4_bds_sat3, top4_bds_sat4]},
+    "gal_gsv": {"top4_cn": float, "sats": [top4_gal_sat1, top4_gal_sat2, top4_gal_sat3, top4_gal_sat4]},
+    "gln_gsv": {"top4_cn": float, "sats": [top4_gln_sat1, top4_gln_sat2, top4_gln_sat3, top4_gln_sat4]}}
+    '''
 
 
 def parse_terminal_gnss_log(
@@ -99,21 +108,23 @@ def parse_terminal_gnss_log(
     start_delay: int = 0
 ) -> list[TermGNSSRecord]:
     """
-    从 Terminal 日志中提取 GNSS 信息
+    从 terminal log 中提取 gnss 信息
+    :param log_text:
+    :param gnss_modes: 指定星座，默认全部选中
+    :param block_num: 指定第 block_num 个 gnss info block
+    :param positive_ttff: 如果为 True 只抓取 ttff > 0
+    :param start_marker: 如果为空则从 text 开头开始，否则从 start_marker 之后开始解析
+    :param end_marker: 如果为空则到 text 结束截止，否则解析到 end_marker 截止
+    :param start_delay: 从 start_maker 开始延迟 start_delay 个数据开始记录
+    :return: term_gnss_data = [term_gnss_record1, term_gnss_record2, ... ]
 
-    Args:
-        log_text: 日志文本
-        gnss_modes: 要提取的 GNSS 模式
-        block_num: 指定提取第几个 GNSS INFO 块（None 表示全部）
-        positive_ttff: 是否只提取 ttff > 0 的记录
-        start_marker: 开始解析的标记
-        end_marker: 结束解析的标记
-        start_delay: 从 start_marker 开始跳过的记录数
+             term_gnss_record = {"utc_time": str, "start": str, "top4_cn": float, "pos_sta": str, "pos_ttff": int,
+             "use_num": int, "total_sv_num": int,
+             "gps_gsv": [gps_term_sat1, gps_term_sat2, ...], "bds_gsv": [bds_term_sat1, bds_term_sat2, ...],
+             "gal_gsv": [gal_term_sat1, gal_term_sat2, ...], "gln_gsv": [gln_term_sat1, gln_term_sat2, ...]}
 
-    Returns:
-        GNSS 记录列表
+             term_sat: (prn, cn)  prn: str, cn: float
     """
-    # 处理起止标记
     if start_marker:
         m_start = re.search(re.escape(start_marker), log_text)
         if not m_start:
@@ -197,7 +208,6 @@ def parse_terminal_gnss_log(
             "total_sv_num": int(m.group(7))
         }
 
-        # 提取各星座的 GSV 信息
         gsv_data = {
             "gps_gsv": [(8, 9), (10, 11), (12, 13), (14, 15)],
             "bds_gsv": [(16, 17), (18, 19), (20, 21), (22, 23)],
@@ -224,14 +234,17 @@ def parse_nmea_log(
     gnss_modes: Sequence[AllowedMode] = ("gps", "bds", "gal", "gln")
 ) -> list[NMEARecord]:
     """
-    解析 NMEA 日志
 
-    Args:
-        log_text: NMEA 日志文本
-        gnss_modes: 要解析的 GNSS 模式
+    :param log_text:
+    :param gnss_modes: 指定星座，默认全部选中
+    :return: nmea_data = [nmea_record1, nmea_record1, ...]
 
-    Returns:
-        NMEA 记录列表
+    nmea_record = {"utc_time": datetime.time, "latitude": float, "longitude": float, "altitude": float, "datetime": datetime.datetime,
+    "speed_kph": float, "course": float, "num_sats": int, "hdop": float, "pdop": float, "vdop": float, "status": str}
+    "gsv_infos": {"gps_gsv": [gps_nmea_sat1, gps_nmea_sat2, ...], "glo_gsv": [glo_nmea_sat1, glo_nmea_sat2, ...],
+    "gal_gsv": [gal_nmea_sat1, gal_nmea_sat2, ...], "bds_gsv": [bds_nmea_sat1, bds_nmea_sat2, ...]}
+
+    nmea_sat = {"prn": str, "elev": int, "azimuth": int, "snr": float}
     """
     nmea_data: list[NMEARecord] = []
     current_record: Optional[NMEARecord] = None
@@ -258,7 +271,6 @@ def parse_nmea_log(
     for line in log_text.strip().split('\n'):
         line = line.strip()
 
-        # 跳过非 NMEA 语句和厂商自定义语句
         if not line.startswith('$') or line.startswith('$PAIRACC'):
             continue
 
@@ -267,8 +279,7 @@ def parse_nmea_log(
         except pynmea2.ParseError:
             continue
 
-        # 获取时间戳，用于分组记录
-        msg_time = getattr(msg, 'timestamp', None)
+        msg_time = getattr(msg, 'timestamp', None)  # 每一条信息都尝试提取timestamp属性
         if msg_time is not None:
             time_str = str(msg_time)
             if time_str != current_time_str:
@@ -276,11 +287,17 @@ def parse_nmea_log(
                     nmea_data.append(current_record)
                 current_time_str = time_str
                 current_record = create_empty_record(msg_time)
-
+        # $GNGGA 提供latitude（纬度）、longitude（经度）、altitude（海拔）、satellites（可见卫星数量）、hdop（Horizontal Dilution of Precision 水平精度因子）
+        # $PAIRACC 是芯片厂商自定义协议，忽略
+        # $GNGLL 未使用
+        # $GNGSA 4条信息，每个星座对应1条。提供pdop（Position Dilution of Precision 位置几何精度因子）、hdop、vdop（Vertical Dilution of Precision 垂直精度因子）
+        # $G#GSV 提供每颗卫星对应的prn（Pseudo-Random Noise 伪随机噪声）、elev（Elevation 俯仰角）、azimuth（Azimuth 方位角）、snr
+        # $GNRMC 提供datetime、speed_kph、course（航向角）、status
+        # $GNVTG 未使用
+        # $GNZDA 未使用
         if current_record is None:
             continue
 
-        # 解析不同类型的 NMEA 语句
         if isinstance(msg, pynmea2.types.talker.GGA):
             current_record['latitude'] = msg.latitude
             current_record['longitude'] = msg.longitude
@@ -341,21 +358,18 @@ def calculate_top4_cn(
     include_constellation: bool = False
 ) -> tuple[Optional[float], list[dict]]:
     """
-    计算 Top4 载噪比平均值
-
-    Args:
-        sats: 卫星列表
-        include_constellation: 是否在结果中包含星座信息
-
-    Returns:
-        (top4_cn 平均值, top4 卫星列表)
+    计算top4 cn
+    :param sats: [sat1, sat2, ...]
+    sat = {"prn": int, "snr": float, **args}
+    :param include_constellation: 是否包含 "constellation" key
+    :return: (top4_cn，[top4_sat1, top4_sat2, top4_sat3, top4_sat4])
     """
     valid_sats = [s for s in sats if s.get('snr') is not None]
     if not valid_sats:
         return None, []
 
     top4_sats = sorted(valid_sats, key=lambda x: x['snr'], reverse=True)[:4]
-    top4_cn = round(sum(s['snr'] for s in top4_sats) / len(top4_sats), 2)
+    top4_cn = round(sum(s['snr'] for s in top4_sats) / 4, 2)
 
     if include_constellation:
         result_sats = [
@@ -373,14 +387,20 @@ def convert_nmea_to_gnss_info(
     gnss_modes: Sequence[AllowedMode] = ("gps", "bds", "gal", "gln")
 ) -> list[GNSSRecord]:
     """
-    将 NMEA 数据转换为 GNSS 信息格式
 
-    Args:
-        nmea_data: NMEA 记录列表
-        gnss_modes: GNSS 模式列表
+    :param nmea_data:
+    :param gnss_modes:
+    :return: gnss_infos = [gnss_time_dict1, gnss_time_dict2, ...]
 
-    Returns:
-        GNSS 信息列表
+    gnss_time_dict = {"utc_time": str（格式化为 HH:MM:SS）, "status": str,
+    "overall": {"top4_cn": float, "sats": [top4_sat1, top4_sat2, top4_sat3, top4_sat4]},
+    "gps_gsv": {"top4_cn": float, "sats": [top4_gps_sat1, top4_gps_sat2, top4_gps_sat3, top4_gps_sat4]},
+    "bds_gsv": {"top4_cn": float, "sats": [top4_bds_sat1, top4_bds_sat2, top4_bds_sat3, top4_bds_sat4]},
+    "gal_gsv": {"top4_cn": float, "sats": [top4_gal_sat1, top4_gal_sat2, top4_gal_sat3, top4_gal_sat4]},
+    "gln_gsv": {"top4_cn": float, "sats": [top4_gln_sat1, top4_gln_sat2, top4_gln_sat3, top4_gln_sat4]}}
+
+    overall_sat = {"prn": str, "snr": float, "constellation": str}
+    sat = {"prn": str, "snr": float}
     """
     gnss_infos = []
 

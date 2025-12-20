@@ -1,19 +1,13 @@
-#!/usr/bin/env python3
-"""
-GNSS Desense 测试执行脚本
-"""
-
 import argparse
 import sys
 from pathlib import Path
 
-# 添加项目根目录到 Python 路径
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
 from src.tests.gnss.desense_test import GNSSDesenseTest
 from src.reporters.gnss_reporter import GNSSReporter
-from src.utils.config_loader import load_yaml_config
+from src.utils.config_loader import load_config
 from src.utils.logger import setup_logger, get_logger
 
 
@@ -49,7 +43,7 @@ def main():
     try:
         # 加载配置
         config_path = project_root / args.config
-        config = load_yaml_config(str(config_path))
+        config = load_config(str(config_path))
         logger.info(f"已加载配置: {config_path}")
 
         # 创建测试实例

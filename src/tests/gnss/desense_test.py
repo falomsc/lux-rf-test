@@ -1,8 +1,3 @@
-"""
-GNSS Desense 测试模块
-测试各种干扰条件下的 GNSS 接收性能
-"""
-
 import time
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -21,12 +16,11 @@ from src.tests.gnss.log_parser import (
 from src.utils.logger import get_logger
 from src.utils.time_utils import format_duration
 
-logger = get_logger(__name__)
+logger = get_logger()
 
 
 @dataclass
 class DesenseTestCase:
-    """Desense 测试用例"""
     name: str
     description: str = ""
     start_cmd: list[str] = field(default_factory=list)
@@ -39,7 +33,6 @@ class DesenseTestCase:
 
     @classmethod
     def from_dict(cls, name: str, data: dict) -> 'DesenseTestCase':
-        """从字典创建测试用例"""
         start_cmd = data.get('start_cmd', '')
         if isinstance(start_cmd, str):
             start_cmd = [start_cmd] if start_cmd else []
@@ -77,18 +70,7 @@ class DesenseTestResult:
 
 
 class GNSSDesenseTest(BaseTest):
-    """
-    GNSS Desense 测试类
-    测试各种干扰源对 GNSS 信号接收的影响
-    """
-
     def __init__(self, config: dict):
-        """
-        初始化 Desense 测试
-
-        Args:
-            config: 测试配置字典
-        """
         super().__init__(config)
 
         # 设备配置
@@ -101,7 +83,7 @@ class GNSSDesenseTest(BaseTest):
         test_params = config.get('test_params', {})
         self.pos_scan_interval = test_params.get('pos_scan_interval', 30)
         self.reboot_time = test_params.get('reboot_time', 60)
-        self.default_duration = test_params.get('default_duration', 30)
+        self.default_duration = test_params.get('default_duration', 30)  # TODO 此参数是否可以删除
 
         # GNSS 配置
         self.pos_cmd = config.get('pos_cmd', [])
@@ -149,24 +131,14 @@ class GNSSDesenseTest(BaseTest):
         logger.info(f"测试会话日志目录: {session_log_dir}")
 
     def teardown(self) -> None:
-        """测试清理"""
         if self._zt:
             self._zt.disconnect()
 
     def run(self) -> dict[str, list[dict]]:
-        """
-        执行 Desense 测试
-
-        Returns:
-            测试结果字典 {case_name: gnss_infos}
-        """
         total_start = time.perf_counter()
 
         try:
-            # 初始定位
             self._wait_for_positioning()
-
-            # 执行各个测试用例
             for case in self.test_cases:
                 self._run_single_case(case)
 
@@ -181,10 +153,8 @@ class GNSSDesenseTest(BaseTest):
 
     def _wait_for_positioning(self) -> bool:
         """
-        等待 GNSS 定位成功
-
-        Returns:
-            是否定位成功
+        发送定位指令，再通过导出 Terminal 的 log 并解析判断是否定位成功
+        :return:
         """
         logger.info("开始等待 GNSS 定位...")
 

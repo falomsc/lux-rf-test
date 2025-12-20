@@ -1,102 +1,94 @@
-"""
-GNSS 日志采集模块
-负责从 Zepp Tool 采集并拉取日志文件
-"""
-
-import os
 import re
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Literal
 
 from src.instruments.zepp_tool import ZeppTool
 from src.utils.logger import get_logger
 
-logger = get_logger(__name__)
+logger = get_logger()
 
 
 class GNSSLogCapture:
     """
-    GNSS 日志采集器
-    从 Zepp Tool 抓取日志并复制到 PC
+    数据采集器，可以采集 Terminal log 或者 NMEA log
     """
-
-    # 日志文件名模式
-    LOG_FILENAME_PATTERN = re.compile(
-        r'^(?P<prefix>\w+)-'
-        r'(?P<year>\d{4})\.(?P<month>\d{2})\.(?P<day>\d{2})-'
-        r'(?P<hour>\d{2})(?P<minute>\d{2})(?P<second>\d{2})'
-        r'\.log$'
-    )
+    PATTERNS = {
+        "terminal": re.compile(
+            r'TERM-'
+            r'(?P<year>\d{4})\.(?P<month>\d{2})\.(?P<day>\d{2})-'
+            r'(?P<hour>\d{2})(?P<minute>\d{2})(?P<second>\d{2})'
+            r'\.log$'
+        ),
+        "nmea": re.compile(
+            r'NMEA-'
+            r'(?P<year>\d{4})\.(?P<month>\d{2})\.(?P<day>\d{2})-'
+            r'(?P<hour>\d{2})(?P<minute>\d{2})(?P<second>\d{2})'
+            r'\.txt$'
+        )
+    }
 
     def __init__(
-        self,
-        zepp_tool: ZeppTool,
-        local_log_dir: str,
-        device_log_dir: str
+            self,
+            zepp_tool: ZeppTool,
+            local_log_dir: str,
+            device_log_dir: str
     ):
-        """
-        初始化日志采集器
-
-        Args:
-            zepp_tool: Zepp Tool 实例
-            local_log_dir: 本地日志保存目录
-            device_log_dir: 设备上的日志目录
-        """
         self._zt = zepp_tool
         self._local_log_dir = Path(local_log_dir)
         self._device_log_dir = device_log_dir
 
-        # 确保本地目录存在
         self._local_log_dir.mkdir(parents=True, exist_ok=True)
         logger.info(f"日志采集器初始化完成，本地目录: {self._local_log_dir}")
 
-    def capture_terminal_log(self, rename_prefix: str = "") -> Optional[str]:
+    def capture_terminal_log(
+            self,
+            rename_prefix: str = "",
+            start_time: Optional[datetime] = None
+    ) -> Optional[str]:
         """
-        导出并采集 Terminal 日志
 
-        Args:
-            rename_prefix: 文件重命名前缀
-
-        Returns:
-            本地日志文件路径，失败返回 None
+        :param rename_prefix:
+        :param start_time:
+        :return:
         """
-        # 先导出日志
         if not self._zt.export_terminal_log():
             logger.error("导出 Terminal 日志失败")
             return None
 
-        return self._capture_log(prefix="TERM", rename_prefix=rename_prefix)
+        return self._capture_log(
+            prefix="TERM",
+            rename_prefix=rename_prefix,
+            start_time=start_time
+        )
 
-    def capture_nmea_log(self, rename_prefix: str = "") -> Optional[str]:
-        """
-        采集 NMEA 日志
-
-        Args:
-            rename_prefix: 文件重命名前缀
-
-        Returns:
-            本地日志文件路径，失败返回 None
-        """
-        return self._capture_log(prefix="NMEA", rename_prefix=rename_prefix)
+    def capture_nmea_log(
+            self,
+            rename_prefix: str = "",
+            start_time: Optional[datetime] = None
+    ) -> Optional[str]:
+        return self._capture_log(
+            prefix="NMEA",
+            rename_prefix=rename_prefix,
+            start_time=start_time
+        )
 
     def _capture_log(
-        self,
-        prefix: str,
-        rename_prefix: str = ""
+            self,
+            prefix: str,
+            rename_prefix: str = "",
+            start_time: Optional[datetime] = None
     ) -> Optional[str]:
         """
-        采集指定前缀的日志文件
 
-        Args:
-            prefix: 日志文件前缀（如 TERM、NMEA）
-            rename_prefix: 文件重命名前缀
-
-        Returns:
-            本地日志文件路径，失败返回 None
+        :param prefix:
+        :param rename_prefix: 原始文件名字的基础上增加前缀，比如 rename_prefix = "positioning-1-"，
+        原始文件为TERM-2025.11.15-163254.log，则导出的文件为 positioning-1-TERM-2025.11.15-163254.log
+        :param start_time:
+        :return:
         """
-        # 查找最新的日志文件
-        latest_log = self._find_latest_log(prefix)
+        # 查找日志文件
+        latest_log = self._find_latest_log(prefix, start_time=start_time)
         if not latest_log:
             logger.error(f"未找到 {prefix} 类型的日志文件")
             return None
@@ -114,23 +106,22 @@ class GNSSLogCapture:
             logger.error(f"采集日志失败: {latest_log}")
             return None
 
-    def _find_latest_log(self, prefix: str) -> Optional[str]:
+    def _find_latest_log(
+            self,
+            pattern_type: Literal["terminal", "nmea"],
+            start_time: Optional[datetime] = None
+    ) -> Optional[str]:
         """
-        查找设备上最新的日志文件
-
-        Args:
-            prefix: 日志文件前缀
-
-        Returns:
-            最新日志文件名，未找到返回 None
+        如果 start_time 为 None，则查找最新的 log 文件，否则查找 start_time 之后的第一个 log 文件。
+        :param pattern_type: 匹配文件类型，terminal 或 nmea
+        :param start_time:
+        :return:
         """
-        files = self._zt.list_files(self._device_log_dir)
+        files = self._zt.list_device_files(self._device_log_dir)
         if not files:
             return None
 
-        latest_log = None
-        latest_dt = None
-
+        valid_logs = []
         for filename in files:
             match = self.LOG_FILENAME_PATTERN.match(filename)
             if not match:
@@ -139,7 +130,6 @@ class GNSSLogCapture:
             if match.group('prefix') != prefix:
                 continue
 
-            # 解析日期时间
             try:
                 dt = datetime(
                     int(match.group('year')),
@@ -149,16 +139,23 @@ class GNSSLogCapture:
                     int(match.group('minute')),
                     int(match.group('second'))
                 )
+                valid_logs.append((dt, filename))
             except ValueError:
                 continue
 
-            if latest_dt is None or dt > latest_dt:
-                latest_dt = dt
-                latest_log = filename
+        if not valid_logs:
+            return None
 
-        return latest_log
+        if start_time is None:
+            latest_log = max(valid_logs, key=lambda x: x[0])[1]
+            return latest_log
+        else:
+            valid_logs.sort(key=lambda x: x[0])
+            for dt, filename in valid_logs:
+                if dt >= start_time:
+                    return filename
+            return None
 
     @property
     def local_log_dir(self) -> Path:
-        """获取本地日志目录"""
         return self._local_log_dir

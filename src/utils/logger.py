@@ -1,5 +1,3 @@
-"""日志模块"""
-
 import logging
 import os
 from datetime import datetime
@@ -43,3 +41,8 @@ def setup_logger(
     logger.addHandler(console_handler)
 
     return logger
+
+
+def get_logger(name: str = "rf_test") -> logging.Logger:
+    """获取已设置的日志器"""
+    return logging.getLogger(name)

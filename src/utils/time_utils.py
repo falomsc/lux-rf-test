@@ -1,17 +1,6 @@
-"""
-时间相关工具函数
-"""
-
-
 def format_duration(seconds: float) -> str:
     """
     格式化时间间隔
-
-    Args:
-        seconds: 秒数
-
-    Returns:
-        格式化的时间字符串
     """
     if seconds < 0:
         return "无效时间"
