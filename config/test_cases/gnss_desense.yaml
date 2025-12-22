@@ -7,21 +7,18 @@ test_info:
 device:
   device_id: "bdb12599"
   zt_log_dir: "/sdcard/hmbletool/"
-  local_log_dir: "./output/logs/gnss_desense"
+  local_log_dir: "./output/gnss_desense/logs/{timestamp}"
 
 # 测试参数
 test_params:
   pos_scan_interval: 30          # 定位扫描间隔（秒）
   term_log_interval: 60          # terminal log导出间隔（秒）
   reboot_time: 60                # 重启等待时间（秒）
-  default_duration: 30           # 默认测试持续时间（秒）
+  output_dir: "./output/gnss_desense/results/{timestamp}"
 
-# GNSS定位命令
-pos_cmd:
-  - "hm:gnss+proc=open"
-  - "hm:gnss+proc=read_auto"
-
-# 重启命令
+# GNSS 定位重启命令
+gnss_open_cmd: "hm:gnss+proc=open"
+read_auto_cmd: "hm:gnss+proc=read_auto"
 reboot_cmd: "hm:sft+power=reboot"
 
 # 测试的GNSS模式: gps, bds, gal, gln
@@ -35,6 +32,7 @@ gnss_modes:
 log_formats:
   - json
   - xlsx
+  - dashboard
 
 # 测试用例定义
 testing_cases:
@@ -74,7 +72,6 @@ testing_cases:
     description: "屏幕高刷新率下的GNSS性能测试"
     start_cmd: "hm:ht+cmd=ht,lcd,refresh,time:50"
     end_cmd: ""
-    start_delay: 0
     need_reboot: true
     duration: 30
     log_prefix: "screen_refresh"
@@ -84,7 +81,6 @@ testing_cases:
     description: "马达振动时的GNSS性能测试"
     start_cmd: "hm:ht+cmd=ht,motor,start"
     end_cmd: "hm:ht+cmd=ht,motor,stop"
-    start_delay: 0
     need_reboot: false
     duration: 30
     log_prefix: "motor"
@@ -94,7 +90,6 @@ testing_cases:
     description: "PSRAM读写时的GNSS性能测试"
     start_cmd: "hm:ht+cmd=ht,storage,start,type:psram"
     end_cmd: "hm:ht+cmd=ht,storage,stop,type:psram"
-    start_delay: 0
     need_reboot: true
     duration: 600
     log_prefix: "psram"
@@ -104,7 +99,6 @@ testing_cases:
     description: "eMMC读写时的GNSS性能测试"
     start_cmd: "hm:ht+cmd=ht,storage,start,type:emmc"
     end_cmd: "hm:ht+cmd=ht,storage,stop,type:emmc"
-    start_delay: 0
     need_reboot: true
     duration: 300
     log_prefix: "emmc"
@@ -114,7 +108,6 @@ testing_cases:
     description: "NOR Flash读写时的GNSS性能测试"
     start_cmd: "hm:ht+cmd=ht,storage,start,type:norflash"
     end_cmd: "hm:ht+cmd=ht,storage,stop,type:norflash"
-    start_delay: 0
     need_reboot: true
     duration: 300
     log_prefix: "norflash"
@@ -126,7 +119,6 @@ testing_cases:
       - "hm:ht+cmd=ht,sensor,set,type:ppg,caloff:1,curr:200,dac:0"
       - "hm:ht+cmd=ht,sensor,enable,type:ppg"
     end_cmd: "hm:ht+cmd=ht,sensor,disable,type:ppg"
-    start_delay: 0
     need_reboot: false
     duration: 30
     log_prefix: "ppg"
@@ -136,7 +128,6 @@ testing_cases:
     description: "音频播放时的GNSS性能测试"
     start_cmd: "hm:ht+cmd=ht,audio,start,name:/system/audio/Hwtest.mp3,vol:90"
     end_cmd: "hm:ht+cmd=ht,audio,stop,name:/system/audio/Hwtest.mp3,vol:90"
-    start_delay: 0
     need_reboot: false
     duration: 30
     log_prefix: "audio"
@@ -146,7 +137,6 @@ testing_cases:
     description: "麦克风录音时的GNSS性能测试"
     start_cmd: "hm:ht+cmd=ht,mic,start"
     end_cmd: "hm:ht+cmd=ht,mic,stop"
-    start_delay: 0
     need_reboot: false
     duration: 30
     log_prefix: "mic"

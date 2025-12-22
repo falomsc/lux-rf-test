@@ -13,7 +13,7 @@ class GNSSLogCapture:
     """
     数据采集器，可以采集 Terminal log 或者 NMEA log
     """
-    PATTERNS = {
+    LOG_FILENAME_PATTERNS = {
         "terminal": re.compile(
             r'TERM-'
             r'(?P<year>\d{4})\.(?P<month>\d{2})\.(?P<day>\d{2})-'
@@ -31,8 +31,8 @@ class GNSSLogCapture:
     def __init__(
             self,
             zepp_tool: ZeppTool,
-            local_log_dir: str,
-            device_log_dir: str
+            local_log_dir: str | Path,
+            device_log_dir: str | Path
     ):
         self._zt = zepp_tool
         self._local_log_dir = Path(local_log_dir)
@@ -49,7 +49,7 @@ class GNSSLogCapture:
         """
 
         :param rename_prefix:
-        :param start_time:
+        :param start_time: 如果 start_time 为 None，则查找最新的 log 文件，否则查找 start_time 之后的第一个 log 文件
         :return:
         """
         if not self._zt.export_terminal_log():
@@ -57,7 +57,7 @@ class GNSSLogCapture:
             return None
 
         return self._capture_log(
-            prefix="TERM",
+            pattern_type="terminal",
             rename_prefix=rename_prefix,
             start_time=start_time
         )
@@ -68,29 +68,30 @@ class GNSSLogCapture:
             start_time: Optional[datetime] = None
     ) -> Optional[str]:
         return self._capture_log(
-            prefix="NMEA",
+            pattern_type="nmea",
             rename_prefix=rename_prefix,
             start_time=start_time
         )
 
+    # TODO 使用正则表达式匹配
     def _capture_log(
             self,
-            prefix: str,
+            pattern_type: Literal["terminal", "nmea"],
             rename_prefix: str = "",
             start_time: Optional[datetime] = None
     ) -> Optional[str]:
         """
 
-        :param prefix:
+        :param pattern_type:
         :param rename_prefix: 原始文件名字的基础上增加前缀，比如 rename_prefix = "positioning-1-"，
         原始文件为TERM-2025.11.15-163254.log，则导出的文件为 positioning-1-TERM-2025.11.15-163254.log
-        :param start_time:
+        :param start_time: 如果 start_time 为 None，则查找最新的 log 文件，否则查找 start_time 之后的第一个 log 文件
         :return:
         """
         # 查找日志文件
-        latest_log = self._find_latest_log(prefix, start_time=start_time)
+        latest_log = self._find_latest_log(pattern_type=pattern_type, start_time=start_time)
         if not latest_log:
-            logger.error(f"未找到 {prefix} 类型的日志文件")
+            logger.error(f"未找到 {pattern_type} 类型的日志文件")
             return None
 
         # 构建路径
@@ -112,9 +113,9 @@ class GNSSLogCapture:
             start_time: Optional[datetime] = None
     ) -> Optional[str]:
         """
-        如果 start_time 为 None，则查找最新的 log 文件，否则查找 start_time 之后的第一个 log 文件。
+
         :param pattern_type: 匹配文件类型，terminal 或 nmea
-        :param start_time:
+        :param start_time: 如果 start_time 为 None，则查找最新的 log 文件，否则查找 start_time 之后的第一个 log 文件
         :return:
         """
         files = self._zt.list_device_files(self._device_log_dir)
@@ -123,13 +124,9 @@ class GNSSLogCapture:
 
         valid_logs = []
         for filename in files:
-            match = self.LOG_FILENAME_PATTERN.match(filename)
+            match = self.LOG_FILENAME_PATTERNS[pattern_type].match(filename)
             if not match:
                 continue
-
-            if match.group('prefix') != prefix:
-                continue
-
             try:
                 dt = datetime(
                     int(match.group('year')),

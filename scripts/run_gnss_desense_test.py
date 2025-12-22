@@ -1,4 +1,5 @@
-import argparse
+import shutil
+from datetime import datetime
 import sys
 from pathlib import Path
 
@@ -10,56 +11,43 @@ from src.reporters.gnss_reporter import GNSSReporter
 from src.utils.config_loader import load_config
 from src.utils.logger import setup_logger, get_logger
 
+CONFIG_RELATIVE_PATH = Path('config/test_cases/gnss_desense.yaml')
+TIMESTAMP = datetime.now().strftime('%Y%m%d_%H%M%S')
+LOG_LEVEL = 'INFO'
+
 
 def main():
-    parser = argparse.ArgumentParser(description='GNSS Desense 测试')
-    parser.add_argument(
-        '-c', '--config',
-        default='config/test_cases/gnss_desense.yaml',
-        help='测试配置文件路径'
-    )
-    parser.add_argument(
-        '-o', '--output',
-        default='output/reports/gnss_desense',
-        help='报告输出目录'
-    )
-    parser.add_argument(
-        '-v', '--verbose',
-        action='store_true',
-        help='详细输出'
-    )
-
-    args = parser.parse_args()
-
-    # 设置日志
-    log_level = 'DEBUG' if args.verbose else 'INFO'
-    setup_logger(level=log_level)
+    setup_logger(level=LOG_LEVEL)
     logger = get_logger(__name__)
+    REPORT_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
     logger.info("=" * 60)
     logger.info("GNSS Desense 测试")
     logger.info("=" * 60)
+    logger.info(f"报告输出目录: {REPORT_OUTPUT_DIR}")
 
     try:
-        # 加载配置
-        config_path = project_root / args.config
+        config_path = project_root / CONFIG_RELATIVE_PATH
         config = load_config(str(config_path))
         logger.info(f"已加载配置: {config_path}")
 
-        # 创建测试实例
         test = GNSSDesenseTest(config)
-
-        # 执行测试
         test.setup()
         try:
             results = test.run()
         finally:
             test.teardown()
 
-        # 生成报告
         reporter = GNSSReporter(str(test.session_log_dir))
-        log_formats = config.get('log_formats', ['json', 'xlsx'])
+        log_formats = config.get('log_formats', ['json', 'xlsx', 'dashboard'])
         report_files = reporter.generate(results, formats=log_formats)
+        copied_report_files = []
+        for report_path in report_files:
+            src = Path(report_path)
+            dst = REPORT_OUTPUT_DIR / src.name
+            shutil.copy2(src, dst)
+            copied_report_files.append(dst)
+
 
         logger.info("=" * 60)
         logger.info("测试完成！")
@@ -67,7 +55,6 @@ def main():
         for f in report_files:
             logger.info(f"报告文件: {f}")
         logger.info("=" * 60)
-
         return 0
 
     except FileNotFoundError as e:

@@ -11,7 +11,7 @@ from src.tests.gnss.log_parser import (
     parse_terminal_gnss_log,
     parse_nmea_log,
     convert_nmea_to_gnss_info,
-    AllowedMode
+    AllowedMode, TermGNSSRecord
 )
 from src.utils.logger import get_logger
 from src.utils.time_utils import format_duration
@@ -77,16 +77,16 @@ class GNSSDesenseTest(BaseTest):
         device_cfg = config.get('device', {})
         self.device_id = device_cfg.get('device_id', '')
         self.device_log_dir = device_cfg.get('zt_log_dir', '/sdcard/hmbletool/')
-        self.local_log_dir = device_cfg.get('local_log_dir', './output/logs/gnss_desense')
+        self.local_log_dir = device_cfg.get('local_log_dir', './output/gnss_desense/logs/{timestamp}')
 
         # 测试参数
         test_params = config.get('test_params', {})
         self.pos_scan_interval = test_params.get('pos_scan_interval', 30)
         self.reboot_time = test_params.get('reboot_time', 60)
-        self.default_duration = test_params.get('default_duration', 30)  # TODO 此参数是否可以删除
 
         # GNSS 配置
-        self.pos_cmd = config.get('pos_cmd', [])
+        self.gnss_open_cmd = config.get('gnss_open_cmd', '')
+        self.read_auto_cmd = config.get('read_auto_cmd', '')
         self.reboot_cmd = config.get('reboot_cmd', 'hm:sft+power=reboot')
         gnss_modes = config.get('gnss_modes', ['gps', 'bds', 'gal', 'gln'])
         self.gnss_modes: tuple[AllowedMode, ...] = tuple(gnss_modes)
@@ -106,29 +106,25 @@ class GNSSDesenseTest(BaseTest):
         self._log_capture: Optional[GNSSLogCapture] = None
         self._results: dict[str, list[dict]] = {}
         self._need_reboot = False
+        self._case_running_num = 0
 
         logger.info(f"Desense 测试初始化完成，共 {len(self.test_cases)} 个启用的测试用例")
 
     def setup(self) -> None:
-        """测试准备"""
-        # 创建带时间戳的日志目录
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        session_log_dir = Path(self.local_log_dir) / timestamp
+        session_log_dir = Path(self.local_log_dir.format(timestamp=self.timestamp))
         session_log_dir.mkdir(parents=True, exist_ok=True)
         self._session_log_dir = session_log_dir
 
         # 连接设备
         self._zt = ZeppTool(self.device_id)
         self._zt.connect()
-
-        # 初始化日志采集器
         self._log_capture = GNSSLogCapture(
             zepp_tool=self._zt,
-            local_log_dir=str(session_log_dir),
+            local_log_dir=self._session_log_dir,
             device_log_dir=self.device_log_dir
         )
 
-        logger.info(f"测试会话日志目录: {session_log_dir}")
+        logger.info(f"日志目录: {self._session_log_dir}")
 
     def teardown(self) -> None:
         if self._zt:
@@ -138,6 +134,8 @@ class GNSSDesenseTest(BaseTest):
         total_start = time.perf_counter()
 
         try:
+            self._open_gnss()
+            self._read_auto()
             self._wait_for_positioning()
             for case in self.test_cases:
                 self._run_single_case(case)
@@ -151,23 +149,21 @@ class GNSSDesenseTest(BaseTest):
 
         return self._results
 
+    def _open_gnss(self):
+        self._zt.send_command(self.gnss_open_cmd)
+
+    def _read_auto(self):
+        self._zt.send_command(self.read_auto_cmd)
+
     def _wait_for_positioning(self) -> bool:
         """
-        发送定位指令，再通过导出 Terminal 的 log 并解析判断是否定位成功
+        导出 Terminal 的 log 并解析判断是否定位成功
         :return:
         """
         logger.info("开始等待 GNSS 定位...")
-
-        # 发送定位命令
-        for cmd in self.pos_cmd:
-            self._zt.send_command(cmd)
-            time.sleep(1)
-
-        # 轮询检查定位状态
         attempt = 1
         while True:
             time.sleep(self.pos_scan_interval)
-
             log_path = self._log_capture.capture_terminal_log(
                 rename_prefix=f"positioning-{attempt}-"
             )
@@ -180,7 +176,7 @@ class GNSSDesenseTest(BaseTest):
                 log_text = f.read()
 
             gnss_data = parse_terminal_gnss_log(
-                log_text,
+                log_text=log_text,
                 gnss_modes=self.gnss_modes,
                 block_num=-1
             )
@@ -192,81 +188,65 @@ class GNSSDesenseTest(BaseTest):
             logger.debug(f"定位尝试 {attempt}，继续等待...")
             attempt += 1
 
-    def _check_positioning_complete(self, gnss_record: dict) -> bool:
+    def _check_positioning_complete(self, gnss_record: TermGNSSRecord) -> bool:
         """检查是否完成定位"""
-        if gnss_record.get('pos_ttff', 0) <= 0:
+        if gnss_record.get('pos_ttff', 0) == 0:
             return False
-
         for mode in self.gnss_modes:
             gsv = gnss_record.get(f'{mode}_gsv', [])
             if len(gsv) < 4:
                 return False
-
         return True
 
     def _run_single_case(self, case: DesenseTestCase) -> DesenseTestResult:
         """
         执行单个测试用例
-
-        Args:
-            case: 测试用例
-
-        Returns:
-            测试结果
         """
         logger.info(f"开始测试: {case.name} - {case.description}")
         start_time = datetime.now()
 
         try:
-            # 检查是否需要重启
+            # 1，卫星定位
             if self._need_reboot:
                 self._perform_reboot()
                 self._need_reboot = False
+                self._open_gnss()
+                self._read_auto()
+                self._wait_for_positioning()
+            elif self._case_running_num != 0:
+                self._open_gnss()
                 self._wait_for_positioning()
 
-            # 发送开始命令
+            # 2，发送开始测试指令
             if case.start_cmd:
-                for cmd in case.start_cmd:
-                    self._zt.send_command(cmd)
-                    time.sleep(1)
+                self._zt.send_commands(case.start_cmd, 1)
 
-            # 等待启动延迟
-            if case.start_delay > 0:
-                logger.debug(f"等待启动延迟: {case.start_delay}秒")
-                time.sleep(case.start_delay)
+            # 3，采集NEMA数据
+            self._zt.collect_nmea_data(duration=case.duration)
 
-            # 采集 NMEA 数据
-            duration = case.duration or self.default_duration
-            self._zt.collect_nmea_data(duration=duration)
-
-            # 拉取日志
-            log_path = self._log_capture.capture_nmea_log(
-                rename_prefix=f"{case.log_prefix}-"
-            )
-
-            # 发送结束命令
+            # 4，发送结束测试指令
             if case.end_cmd:
-                for cmd in case.end_cmd:
-                    self._zt.send_command(cmd)
-                    time.sleep(1)
-
-            # 标记是否需要重启
+                self._zt.send_commands(case.end_cmd, 1)
             if case.need_reboot:
                 self._need_reboot = True
 
-            # 解析数据
+            # 5，从手机拷贝日志文件到PC
+            log_path = self._log_capture.capture_nmea_log(
+                rename_prefix=f"{case.log_prefix}-",
+                start_time=start_time
+            )
+
+            # 6，解析日志文件
             if log_path:
                 with open(log_path, 'r', encoding='utf-8') as f:
                     log_text = f.read()
-
                 nmea_data = parse_nmea_log(log_text, gnss_modes=self.gnss_modes)
                 gnss_infos = convert_nmea_to_gnss_info(nmea_data, gnss_modes=self.gnss_modes)
             else:
                 gnss_infos = []
-
-            # 保存结果
             self._results[case.name] = gnss_infos
 
+            # 7，输出测试结果
             end_time = datetime.now()
             result = DesenseTestResult(
                 case_name=case.name,
@@ -275,12 +255,13 @@ class GNSSDesenseTest(BaseTest):
                 end_time=end_time,
                 success=True
             )
-
-            logger.info(f"测试完成: {case.name}，采集到 {len(gnss_infos)} 条记录")
+            self._case_running_num += 1
+            logger.info(f"{self._case_running_num}，测试完成: {case.name}，采集到 {len(gnss_infos)} 条记录")
             return result
 
         except Exception as e:
-            logger.error(f"测试用例 {case.name} 执行失败: {e}")
+            self._case_running_num += 1
+            logger.error(f"{self._case_running_num}，测试用例 {case.name} 执行失败: {e}")
             return DesenseTestResult(
                 case_name=case.name,
                 gnss_infos=[],
@@ -305,3 +286,7 @@ class GNSSDesenseTest(BaseTest):
     def session_log_dir(self) -> Path:
         """获取当前会话的日志目录"""
         return self._session_log_dir
+
+    def get_timestamp(self, timestamp: str):
+        # 获取时间戳以便建立 log 目录
+        self.timestamp = timestamp

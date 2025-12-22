@@ -28,7 +28,7 @@ class ZeppTool:
     UI_OK = "好的"
     UI_MORE_OPTIONS = "更多选项"
     UI_EXPORT_LOG = "导出操作日志"
-    UI_SENSOR_TYPE = "传感器数据类型(GSENSOR)"
+    UI_SENSOR_TYPE = "传感器数据类型"
     UI_GSENSOR = "(GSENSOR)加速传感器"
     UI_NMEA = "(NMEA)GPS NMEA数据"
 
@@ -123,7 +123,7 @@ class ZeppTool:
             self.d(text=self.UI_DATA_COLLECT).click()
             self._delay()
 
-            self.d(text=self.UI_SENSOR_TYPE).click()
+            self.d(textContains=self.UI_SENSOR_TYPE).click()
             self._delay()
 
             # 取消选择 GSENSOR，选择 NMEA
@@ -175,13 +175,23 @@ class ZeppTool:
             logger.error(f"发送命令失败: {e}")
             return False
 
-    def send_commands(self, commands: list[str]) -> bool:
+    def send_commands(self, commands: str | list[str], delay: int | float) -> bool:
         """
         批量发送命令
+        :param commands:
+        :param delay:
+        :return: 只有 commands 为空列表或所有元素为空字符串时返回 False，否则返回 True
         """
-        for cmd in commands:
-            if not self.send_command(cmd):
-                return False
+        if isinstance(commands, str):
+            commands = [commands]
+        valid_commands = [cmd for cmd in commands if cmd and cmd.strip()]
+        if not valid_commands:
+            return False
+
+        for cmd in valid_commands:
+            self.send_command(cmd)
+            if delay > 0:
+                time.sleep(delay)
         return True
 
     def export_terminal_log(self) -> bool:
