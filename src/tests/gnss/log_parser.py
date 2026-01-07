@@ -1,12 +1,17 @@
 """
-Terminal log 解析得到 TermGNSSRecord
+def parse_terminal_gnss_log -> list[TermGNSSRecord]
+def parse_nmea_log -> list[NMEARecord]
+def convert_nmea_to_gnss_info -> list[GNSSRecord]
+def calculate_top4_cn -> (top4_cn, [top4_sat1, top4_sat2, top4_sat3, top4_sat4])
+
+terminal log 解析得到 TermGNSSRecord
 NEMA log 解析得到 NMEARecord
 需要转换成 GNSSRecord 进行统计分析
 TODO 缺少方法将 TermGNSSRecord 转换成 GNSSRecord
 """
 import re
 from datetime import datetime, time as dt_time
-from typing import Literal, Sequence, Optional, TypedDict
+from typing import Literal, Sequence, TypedDict
 
 import pynmea2
 
@@ -25,13 +30,19 @@ TALKER_TO_MODE: dict[str, AllowedMode] = {
 
 
 class Sat(TypedDict):
-    """卫星基本信息"""
+    """卫星基本信息，用于 TermGNSSRecord 和 GNSSRecord"""
     prn: str
     snr: float
 
 
+class GsvInfo(TypedDict):
+    """GSV 信息，用于 GNSSRecord"""
+    top4_cn: float | None
+    sats: list[Sat]
+
+
 class NMEASat(TypedDict):
-    """NMEA 卫星详细信息"""
+    """NMEA 卫星详细信息，用于 NMEARecord"""
     prn: str
     elev: int
     azimuth: int
@@ -55,8 +66,8 @@ class TermGNSSRecord(TypedDict):
 
 class NMEARecord(TypedDict):
     """NMEA 解析后的完整记录"""
-    utc_time: Optional[dt_time]
-    datetime: Optional[datetime]
+    utc_time: dt_time | None
+    datetime: datetime | None
     latitude: float
     longitude: float
     altitude: float
@@ -74,12 +85,6 @@ class NMEARecord(TypedDict):
     '''
 
 
-class GsvInfo(TypedDict):
-    """GSV 信息"""
-    top4_cn: Optional[float]
-    sats: list[Sat]
-
-
 class GNSSRecord(TypedDict):
     """处理后的 GNSS 记录"""
     utc_time: str
@@ -90,22 +95,22 @@ class GNSSRecord(TypedDict):
     gal_gsv: GsvInfo
     gln_gsv: GsvInfo
     '''
-    "overall": {"top4_cn": float, "sats": [top4_sat1, top4_sat2, top4_sat3, top4_sat4]},
-    "gps_gsv": {"top4_cn": float, "sats": [top4_gps_sat1, top4_gps_sat2, top4_gps_sat3, top4_gps_sat4]},
-    "bds_gsv": {"top4_cn": float, "sats": [top4_bds_sat1, top4_bds_sat2, top4_bds_sat3, top4_bds_sat4]},
-    "gal_gsv": {"top4_cn": float, "sats": [top4_gal_sat1, top4_gal_sat2, top4_gal_sat3, top4_gal_sat4]},
-    "gln_gsv": {"top4_cn": float, "sats": [top4_gln_sat1, top4_gln_sat2, top4_gln_sat3, top4_gln_sat4]}}
+    "overall": {"top4_cn": float, "sats": [overall_top4_sat1, overall_top4_sat2, overall_top4_sat3, overall_top4_sat4]},
+    "gps_gsv": {"top4_cn": float, "sats": [gps_top4_sat1, gps_top4_sat2, gps_top4_sat3, gps_top4_sat4]},
+    "bds_gsv": {"top4_cn": float, "sats": [bds_top4_sat1, bds_top4_sat2, bds_top4_sat3, bds_top4_sat4]},
+    "gal_gsv": {"top4_cn": float, "sats": [gal_top4_sat1, gal_top4_sat2, gal_top4_sat3, gal_top4_sat4]},
+    "gln_gsv": {"top4_cn": float, "sats": [gln_top4_sat1, gln_top4_sat2, gln_top4_sat3, gln_top4_sat4]}}
     '''
 
 
 def parse_terminal_gnss_log(
-    log_text: str,
-    gnss_modes: Sequence[AllowedMode] = ("gps", "bds", "gal", "gln"),
-    block_num: Optional[int] = None,
-    positive_ttff: bool = False,
-    start_marker: Optional[str] = None,
-    end_marker: Optional[str] = None,
-    start_delay: int = 0
+        log_text: str,
+        gnss_modes: Sequence[AllowedMode] = ("gps", "bds", "gal", "gln"),
+        block_num: int | None = None,
+        positive_ttff: bool = False,
+        start_marker: str | None = None,
+        end_marker: str | None = None,
+        start_delay: int = 0
 ) -> list[TermGNSSRecord]:
     """
     从 terminal log 中提取 gnss 信息
@@ -123,7 +128,7 @@ def parse_terminal_gnss_log(
              "gps_gsv": [gps_term_sat1, gps_term_sat2, ...], "bds_gsv": [bds_term_sat1, bds_term_sat2, ...],
              "gal_gsv": [gal_term_sat1, gal_term_sat2, ...], "gln_gsv": [gln_term_sat1, gln_term_sat2, ...]}
 
-             term_sat: (prn, cn)  prn: str, cn: float
+             term_sat = (prn: str, cn: float)
     """
     if start_marker:
         m_start = re.search(re.escape(start_marker), log_text)
@@ -230,8 +235,8 @@ def parse_terminal_gnss_log(
 
 
 def parse_nmea_log(
-    log_text: str,
-    gnss_modes: Sequence[AllowedMode] = ("gps", "bds", "gal", "gln")
+        log_text: str,
+        gnss_modes: Sequence[AllowedMode] = ("gps", "bds", "gal", "gln")
 ) -> list[NMEARecord]:
     """
 
@@ -247,8 +252,8 @@ def parse_nmea_log(
     nmea_sat = {"prn": str, "elev": int, "azimuth": int, "snr": float}
     """
     nmea_data: list[NMEARecord] = []
-    current_record: Optional[NMEARecord] = None
-    current_time_str: Optional[str] = None
+    current_record: NMEARecord | None = None
+    current_time_str: str | None = None
     gnss_modes_set = set(gnss_modes)
 
     def create_empty_record(msg_time: dt_time) -> NMEARecord:
@@ -353,38 +358,9 @@ def parse_nmea_log(
     return nmea_data
 
 
-def calculate_top4_cn(
-    sats: list[dict],
-    include_constellation: bool = False
-) -> tuple[Optional[float], list[dict]]:
-    """
-    计算top4 cn
-    :param sats: [sat1, sat2, ...]
-    sat = {"prn": int, "snr": float, **args}
-    :param include_constellation: 是否包含 "constellation" key
-    :return: (top4_cn，[top4_sat1, top4_sat2, top4_sat3, top4_sat4])
-    """
-    valid_sats = [s for s in sats if s.get('snr') is not None]
-    if not valid_sats:
-        return None, []
-
-    top4_sats = sorted(valid_sats, key=lambda x: x['snr'], reverse=True)[:4]
-    top4_cn = round(sum(s['snr'] for s in top4_sats) / 4, 2)
-
-    if include_constellation:
-        result_sats = [
-            {"prn": s["prn"], "snr": s["snr"], "constellation": s.get("constellation", "")}
-            for s in top4_sats
-        ]
-    else:
-        result_sats = [{"prn": s["prn"], "snr": s["snr"]} for s in top4_sats]
-
-    return top4_cn, result_sats
-
-
 def convert_nmea_to_gnss_info(
-    nmea_data: list[NMEARecord],
-    gnss_modes: Sequence[AllowedMode] = ("gps", "bds", "gal", "gln")
+        nmea_data: list[NMEARecord],
+        gnss_modes: Sequence[AllowedMode] = ("gps", "bds", "gal", "gln")
 ) -> list[GNSSRecord]:
     """
 
@@ -393,11 +369,11 @@ def convert_nmea_to_gnss_info(
     :return: gnss_infos = [gnss_time_dict1, gnss_time_dict2, ...]
 
     gnss_time_dict = {"utc_time": str（格式化为 HH:MM:SS）, "status": str,
-    "overall": {"top4_cn": float, "sats": [top4_sat1, top4_sat2, top4_sat3, top4_sat4]},
-    "gps_gsv": {"top4_cn": float, "sats": [top4_gps_sat1, top4_gps_sat2, top4_gps_sat3, top4_gps_sat4]},
-    "bds_gsv": {"top4_cn": float, "sats": [top4_bds_sat1, top4_bds_sat2, top4_bds_sat3, top4_bds_sat4]},
-    "gal_gsv": {"top4_cn": float, "sats": [top4_gal_sat1, top4_gal_sat2, top4_gal_sat3, top4_gal_sat4]},
-    "gln_gsv": {"top4_cn": float, "sats": [top4_gln_sat1, top4_gln_sat2, top4_gln_sat3, top4_gln_sat4]}}
+    "overall": {"top4_cn": float, "sats": [overall_top4_sat1, overall_top4_sat2, overall_top4_sat3, overall_top4_sat4]},
+    "gps_gsv": {"top4_cn": float, "sats": [gps_top4_sat1, gps_top4_sat2, gps_top4_sat3, gps_top4_sat4]},
+    "bds_gsv": {"top4_cn": float, "sats": [bds_top4_sat1, bds_top4_sat2, bds_top4_sat3, bds_top4_sat4]},
+    "gal_gsv": {"top4_cn": float, "sats": [gal_top4_sat1, gal_top4_sat2, gal_top4_sat3, gal_top4_sat4]},
+    "gln_gsv": {"top4_cn": float, "sats": [gln_top4_sat1, gln_top4_sat2, gln_top4_sat3, gln_top4_sat4]}}
 
     overall_sat = {"prn": str, "snr": float, "constellation": str}
     sat = {"prn": str, "snr": float}
@@ -438,3 +414,35 @@ def convert_nmea_to_gnss_info(
 
     logger.debug(f"转换得到 {len(gnss_infos)} 条 GNSS 信息记录")
     return gnss_infos
+
+
+def calculate_top4_cn(
+        sats: list[dict],
+        include_constellation: bool = False
+) -> tuple[float | None, list[dict]]:
+    """
+    计算top4 cn
+    :param sats: [sat1, sat2, ...]
+    sat = {"prn": str, "snr": float, **args}
+    :param include_constellation: 是否包含 "constellation" key
+    :return: (top4_cn, [top4_sat1, top4_sat2, top4_sat3, top4_sat4])
+
+    top4_sat = {"prn": str, "snr": float, "constellation": str} if include_constellation else {"prn": str, "snr": float}
+    """
+    valid_sats = [s for s in sats if s.get('snr') is not None]
+    if not valid_sats:
+        return None, []
+
+    top4_sats = sorted(valid_sats, key=lambda x: x['snr'], reverse=True)[:4]
+    # top4_cn = round(sum(s['snr'] for s in top4_sats) / 4, 2)
+    top4_cn = sum(s['snr'] for s in top4_sats) / 4
+
+    if include_constellation:
+        result_sats = [
+            {"prn": s["prn"], "snr": s["snr"], "constellation": s.get("constellation", "")}
+            for s in top4_sats
+        ]
+    else:
+        result_sats = [{"prn": s["prn"], "snr": s["snr"]} for s in top4_sats]
+
+    return top4_cn, result_sats
