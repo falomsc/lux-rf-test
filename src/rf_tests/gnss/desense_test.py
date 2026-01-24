@@ -6,8 +6,8 @@ from typing import Optional
 
 from src.core.base_test import BaseTest
 from src.instruments.zepp_tool import ZeppTool
-from src.tests.gnss.log_capture import GNSSLogCapture
-from src.tests.gnss.log_parser import (
+from src.rf_tests.gnss.log_capture import GNSSLogCapture
+from src.rf_tests.gnss.log_parser import (
     parse_terminal_gnss_log,
     parse_nmea_log,
     convert_nmea_to_gnss_info,

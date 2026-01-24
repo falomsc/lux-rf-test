@@ -265,10 +265,3 @@ class ZeppTool:
         """
         result = self.d.shell(command)
         return result.output.strip()
-
-    def list_device_files(self, device_directory: str) -> list[str]:
-        """
-        列出手机目录中的文件
-        """
-        output = self.shell(f'ls -1 {device_directory}')
-        return output.splitlines() if output else []

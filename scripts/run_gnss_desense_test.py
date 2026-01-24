@@ -6,7 +6,7 @@ from pathlib import Path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
-from src.tests.gnss.desense_test import GNSSDesenseTest
+from src.rf_tests.gnss.desense_test import GNSSDesenseTest
 from src.reporters.gnss_reporter import GNSSReporter
 from src.utils.config_loader import load_config
 from src.utils.logger import setup_logger, get_logger

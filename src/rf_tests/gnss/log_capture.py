@@ -1,4 +1,5 @@
 import re
+import shlex
 from datetime import datetime
 from pathlib import Path
 from typing import Optional, Literal
@@ -11,7 +12,7 @@ logger = get_logger()
 
 class GNSSLogCapture:
     """
-    数据采集器，可以采集 Terminal log 或者 NMEA log
+    数据采集器，操作 APP 导出 Terminal log 或者 NMEA log 到手机
     """
     LOG_FILENAME_PATTERNS = {
         "terminal": re.compile(
@@ -76,6 +77,8 @@ class GNSSLogCapture:
     # TODO 使用正则表达式匹配
     def _capture_log(
             self,
+            pattern: str,
+            repl: str,
             pattern_type: Literal["terminal", "nmea"],
             rename_prefix: str = "",
             start_time: Optional[datetime] = None
@@ -118,7 +121,8 @@ class GNSSLogCapture:
         :param start_time: 如果 start_time 为 None，则查找最新的 log 文件，否则查找 start_time 之后的第一个 log 文件
         :return:
         """
-        files = self._zt.list_device_files(self._device_log_dir)
+        output = self._zt.shell(f'ls -1 {self._device_log_dir}')
+        files = output.splitlines() if output else []
         if not files:
             return None
 
@@ -127,6 +131,17 @@ class GNSSLogCapture:
             match = self.LOG_FILENAME_PATTERNS[pattern_type].match(filename)
             if not match:
                 continue
+
+            full_path = f"{self._device_log_dir}/{filename}"
+            quoted = shlex.quote(full_path)
+            out = self._zt.shell(f"stat -c %Y {quoted}").strip()
+            if out.isdigit():
+                mtime = int(out)
+            else:
+                continue
+
+            valid_logs.append((mtime, filename))
+
             try:
                 dt = datetime(
                     int(match.group('year')),

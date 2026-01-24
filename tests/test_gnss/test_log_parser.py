@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from src.tests.gnss.log_parser import calculate_top4_cn, parse_nmea_log
+from src.rf_tests.gnss.log_parser import calculate_top4_cn, parse_nmea_log
 
 sys.path.append(os.getcwd())
 
