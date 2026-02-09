@@ -1,6 +1,6 @@
 def format_duration(seconds: float) -> str:
     """
-    格式化时间间隔
+    把流逝过的秒转化成小时分钟秒
     """
     if seconds < 0:
         return "无效时间"

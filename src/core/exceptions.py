@@ -8,6 +8,11 @@ class InstrumentError(RFTestError):
     pass
 
 
+class TestError(RFTestError):
+    """测试执行异常"""
+    pass
+
+
 class ConnectionError(InstrumentError):
     """连接异常"""
     pass
@@ -18,11 +23,15 @@ class CommandError(InstrumentError):
     pass
 
 
-class TestError(RFTestError):
-    """测试执行异常"""
+class ConfigError(RFTestError):
+    """配置相关异常"""
+    pass
+
+class PosMaxAttemptError(RFTestError):
+    """位置获取最大尝试次数异常"""
     pass
 
 
-class ConfigError(RFTestError):
-    """配置相关异常"""
+class RebootMaxAttemptError(RFTestError):
+    """重启等待最大次数异常"""
     pass

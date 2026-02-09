@@ -1,17 +1,13 @@
 """
-def parse_terminal_gnss_log -> list[TermGNSSRecord]
-def parse_nmea_log -> list[NMEARecord]
-def convert_nmea_to_gnss_info -> list[GNSSRecord]
+def parse_term_records -> list[TermGNSSRecord]
+def parse_nmea_records -> list[NMEARecord]
+def convert_nmea_records_to_gnss_records -> list[GNSSRecord]
+def convert_term_records_to_gnss_records -> list[GNSSRecord]
 def calculate_top4_cn -> (top4_cn, [top4_sat1, top4_sat2, top4_sat3, top4_sat4])
-
-terminal log 解析得到 TermGNSSRecord
-NEMA log 解析得到 NMEARecord
-需要转换成 GNSSRecord 进行统计分析
-TODO 缺少方法将 TermGNSSRecord 转换成 GNSSRecord
 """
 import re
 from datetime import datetime, time as dt_time
-from typing import Literal, Sequence, TypedDict
+from typing import Literal, Sequence, TypedDict, NotRequired
 
 import pynmea2
 
@@ -30,9 +26,11 @@ TALKER_TO_MODE: dict[str, AllowedMode] = {
 
 
 class Sat(TypedDict):
-    """卫星基本信息，用于 TermGNSSRecord 和 GNSSRecord"""
+    """卫星基本信息"""
     prn: str
     snr: float
+    elev: NotRequired[int]
+    azimuth: NotRequired[int]
 
 
 class GsvInfo(TypedDict):
@@ -40,16 +38,7 @@ class GsvInfo(TypedDict):
     top4_cn: float | None
     sats: list[Sat]
 
-
-class NMEASat(TypedDict):
-    """NMEA 卫星详细信息，用于 NMEARecord"""
-    prn: str
-    elev: int
-    azimuth: int
-    snr: float
-
-
-class TermGNSSRecord(TypedDict):
+class TermRecord(TypedDict):
     """Terminal 日志中的 GNSS 记录"""
     utc_time: str
     start: str
@@ -58,10 +47,10 @@ class TermGNSSRecord(TypedDict):
     pos_ttff: int
     use_num: int
     total_sv_num: int
-    gps_gsv: list[Sat]
-    bds_gsv: list[Sat]
-    gal_gsv: list[Sat]
-    gln_gsv: list[Sat]
+    gps_gsv: NotRequired[list[Sat]]
+    bds_gsv: NotRequired[list[Sat]]
+    gal_gsv: NotRequired[list[Sat]]
+    gln_gsv: NotRequired[list[Sat]]
 
 
 class NMEARecord(TypedDict):
@@ -78,11 +67,10 @@ class NMEARecord(TypedDict):
     pdop: float
     vdop: float
     status: str
-    gsv_infos: dict[str, list[NMEASat]]
-    '''
-    "gsv_infos": {"gps_gsv": [gps_nmea_sat1, gps_nmea_sat2, ...], "glo_gsv": [glo_nmea_sat1, glo_nmea_sat2, ...],
-    "gal_gsv": [gal_nmea_sat1, gal_nmea_sat2, ...], "bds_gsv": [bds_nmea_sat1, bds_nmea_sat2, ...]}
-    '''
+    gps_gsv: NotRequired[list[Sat]]
+    bds_gsv: NotRequired[list[Sat]]
+    gal_gsv: NotRequired[list[Sat]]
+    gln_gsv: NotRequired[list[Sat]]
 
 
 class GNSSRecord(TypedDict):
@@ -103,7 +91,7 @@ class GNSSRecord(TypedDict):
     '''
 
 
-def parse_terminal_gnss_log(
+def parse_term_records(
         log_text: str,
         gnss_modes: Sequence[AllowedMode] = ("gps", "bds", "gal", "gln"),
         block_num: int | None = None,
@@ -111,7 +99,7 @@ def parse_terminal_gnss_log(
         start_marker: str | None = None,
         end_marker: str | None = None,
         start_delay: int = 0
-) -> list[TermGNSSRecord]:
+) -> list[TermRecord]:
     """
     从 terminal log 中提取 gnss 信息
     :param log_text:
@@ -121,9 +109,9 @@ def parse_terminal_gnss_log(
     :param start_marker: 如果为空则从 text 开头开始，否则从 start_marker 之后开始解析
     :param end_marker: 如果为空则到 text 结束截止，否则解析到 end_marker 截止
     :param start_delay: 从 start_maker 开始延迟 start_delay 个数据开始记录
-    :return: term_gnss_data = [term_gnss_record1, term_gnss_record2, ... ]
+    :return: term_records = [term_record1, term_record2, ... ]
 
-             term_gnss_record = {"utc_time": str, "start": str, "top4_cn": float, "pos_sta": str, "pos_ttff": int,
+             term_record = {"utc_time": str, "start": str, "top4_cn": float, "pos_sta": str, "pos_ttff": int,
              "use_num": int, "total_sv_num": int,
              "gps_gsv": [gps_term_sat1, gps_term_sat2, ...], "bds_gsv": [bds_term_sat1, bds_term_sat2, ...],
              "gal_gsv": [gal_term_sat1, gal_term_sat2, ...], "gln_gsv": [gln_term_sat1, gln_term_sat2, ...]}
@@ -171,7 +159,7 @@ def parse_terminal_gnss_log(
             L1\s+(\d+)\s+([\d.]+)
     """, re.VERBOSE | re.DOTALL)
 
-    term_gnss_data = []
+    term_records = []
     seen_times = set()
     blocks = re.split(r'(?=GNSS INFO:)', log_text)
 
@@ -203,7 +191,7 @@ def parse_terminal_gnss_log(
             continue
         seen_times.add(utc_time)
 
-        gnss_info = {
+        term_record = {
             "utc_time": utc_time,
             "start": m.group(2),
             "top4_cn": float(m.group(3)),
@@ -223,18 +211,18 @@ def parse_terminal_gnss_log(
         for mode in gnss_modes:
             key = f"{mode}_gsv"
             if key in gsv_data:
-                gnss_info[key] = [
+                term_record[key] = [
                     {"prn": m.group(idx[0]), "snr": float(m.group(idx[1]))}
                     for idx in gsv_data[key]
                 ]
 
-        term_gnss_data.append(gnss_info)
+        term_records.append(term_record)
 
-    logger.debug(f"解析到 {len(term_gnss_data)} 条 Terminal GNSS 记录")
-    return term_gnss_data
+    logger.debug(f"解析到 {len(term_records)} 条 Terminal GNSS 记录")
+    return term_records
 
 
-def parse_nmea_log(
+def parse_nmea_records(
         log_text: str,
         gnss_modes: Sequence[AllowedMode] = ("gps", "bds", "gal", "gln")
 ) -> list[NMEARecord]:
@@ -242,16 +230,18 @@ def parse_nmea_log(
 
     :param log_text:
     :param gnss_modes: 指定星座，默认全部选中
-    :return: nmea_data = [nmea_record1, nmea_record1, ...]
+    :return: nmea_records = [nmea_record1, nmea_record1, ...]
 
     nmea_record = {"utc_time": datetime.time, "latitude": float, "longitude": float, "altitude": float, "datetime": datetime.datetime,
-    "speed_kph": float, "course": float, "num_sats": int, "hdop": float, "pdop": float, "vdop": float, "status": str}
-    "gsv_infos": {"gps_gsv": [gps_nmea_sat1, gps_nmea_sat2, ...], "glo_gsv": [glo_nmea_sat1, glo_nmea_sat2, ...],
-    "gal_gsv": [gal_nmea_sat1, gal_nmea_sat2, ...], "bds_gsv": [bds_nmea_sat1, bds_nmea_sat2, ...]}
+    "speed_kph": float, "course": float, "num_sats": int, "hdop": float, "pdop": float, "vdop": float, "status": str,
+    "gps_gsv": [gps_nmea_sat1, gps_nmea_sat2, ...],
+    "glo_gsv": [glo_nmea_sat1, glo_nmea_sat2, ...],
+    "gal_gsv": [gal_nmea_sat1, gal_nmea_sat2, ...],
+    "bds_gsv": [bds_nmea_sat1, bds_nmea_sat2, ...]}
 
     nmea_sat = {"prn": str, "elev": int, "azimuth": int, "snr": float}
     """
-    nmea_data: list[NMEARecord] = []
+    nmea_records: list[NMEARecord] = []
     current_record: NMEARecord | None = None
     current_time_str: str | None = None
     gnss_modes_set = set(gnss_modes)
@@ -269,8 +259,7 @@ def parse_nmea_log(
             "hdop": 0.0,
             "pdop": 0.0,
             "vdop": 0.0,
-            "status": "V",
-            "gsv_infos": {f"{mode}_gsv": [] for mode in gnss_modes}
+            "status": "V"
         }
 
     for line in log_text.strip().split('\n'):
@@ -289,7 +278,7 @@ def parse_nmea_log(
             time_str = str(msg_time)
             if time_str != current_time_str:
                 if current_record is not None:
-                    nmea_data.append(current_record)
+                    nmea_records.append(current_record)
                 current_time_str = time_str
                 current_record = create_empty_record(msg_time)
         # $GNGGA 提供latitude（纬度）、longitude（经度）、altitude（海拔）、satellites（可见卫星数量）、hdop（Horizontal Dilution of Precision 水平精度因子）
@@ -329,7 +318,7 @@ def parse_nmea_log(
                 try:
                     elev = getattr(msg, f'elevation_deg_{i}', None)
                     azim = getattr(msg, f'azimuth_{i}', None)
-                    current_record['gsv_infos'][gsv_key].append({
+                    current_record.setdefault(gsv_key, []).append({
                         "prn": prn,
                         "elev": int(elev) if elev else 0,
                         "azimuth": int(azim) if azim else 0,
@@ -352,50 +341,32 @@ def parse_nmea_log(
 
     # 添加最后一条记录
     if current_record:
-        nmea_data.append(current_record)
+        nmea_records.append(current_record)
 
-    logger.debug(f"解析到 {len(nmea_data)} 条 NMEA 记录")
-    return nmea_data
+    logger.debug(f"解析到 {len(nmea_records)} 条 NMEA 记录")
+    return nmea_records
 
 
-def convert_nmea_to_gnss_info(
-        nmea_data: list[NMEARecord],
+def convert_term_records_to_gnss_records(
+        term_records: list[TermRecord],
         gnss_modes: Sequence[AllowedMode] = ("gps", "bds", "gal", "gln")
 ) -> list[GNSSRecord]:
-    """
-
-    :param nmea_data:
-    :param gnss_modes:
-    :return: gnss_infos = [gnss_time_dict1, gnss_time_dict2, ...]
-
-    gnss_time_dict = {"utc_time": str（格式化为 HH:MM:SS）, "status": str,
-    "overall": {"top4_cn": float, "sats": [overall_top4_sat1, overall_top4_sat2, overall_top4_sat3, overall_top4_sat4]},
-    "gps_gsv": {"top4_cn": float, "sats": [gps_top4_sat1, gps_top4_sat2, gps_top4_sat3, gps_top4_sat4]},
-    "bds_gsv": {"top4_cn": float, "sats": [bds_top4_sat1, bds_top4_sat2, bds_top4_sat3, bds_top4_sat4]},
-    "gal_gsv": {"top4_cn": float, "sats": [gal_top4_sat1, gal_top4_sat2, gal_top4_sat3, gal_top4_sat4]},
-    "gln_gsv": {"top4_cn": float, "sats": [gln_top4_sat1, gln_top4_sat2, gln_top4_sat3, gln_top4_sat4]}}
-
-    overall_sat = {"prn": str, "snr": float, "constellation": str}
-    sat = {"prn": str, "snr": float}
-    """
-    gnss_infos = []
-
-    for nmea_record in nmea_data:
-        utc_time = nmea_record['utc_time']
-        current_record = {
-            "utc_time": utc_time.strftime("%H:%M:%S") if utc_time else None,
-            "status": nmea_record['status'],
+    gnss_records = []
+    for term_record in term_records:
+        utc_time = term_record['utc_time']
+        gnss_record = {
+            "utc_time": utc_time if utc_time else None,
+            "status": term_record['pos_sta'],
             "overall": {"top4_cn": None, "sats": []},
         }
 
-        gsv_infos = nmea_record.get('gsv_infos', {})
         all_sats = []
 
         for mode in gnss_modes:
             mode_key = f"{mode}_gsv"
-            mode_sats = gsv_infos.get(mode_key, [])
+            mode_sats = term_record.get(mode_key, [])
             top4_cn, sats = calculate_top4_cn(mode_sats)
-            current_record[mode_key] = {"top4_cn": top4_cn, "sats": sats}
+            gnss_record[mode_key] = {"top4_cn": top4_cn, "sats": sats}
 
             # 收集所有卫星用于计算总体 top4
             all_sats.extend(
@@ -407,13 +378,53 @@ def convert_nmea_to_gnss_info(
         overall_top4_cn, overall_sats = calculate_top4_cn(
             all_sats, include_constellation=True
         )
-        current_record["overall"]["top4_cn"] = overall_top4_cn
-        current_record["overall"]["sats"] = overall_sats
+        gnss_record["overall"]["top4_cn"] = overall_top4_cn
+        gnss_record["overall"]["sats"] = overall_sats
 
-        gnss_infos.append(current_record)
+        gnss_records.append(gnss_record)
 
-    logger.debug(f"转换得到 {len(gnss_infos)} 条 GNSS 信息记录")
-    return gnss_infos
+    logger.debug(f"转换得到 {len(gnss_records)} 条 GNSS 信息记录")
+    return gnss_records
+
+
+def convert_nmea_records_to_gnss_records(
+        nmea_records: list[NMEARecord],
+        gnss_modes: Sequence[AllowedMode] = ("gps", "bds", "gal", "gln")
+) -> list[GNSSRecord]:
+    gnss_records = []
+    for nmea_record in nmea_records:
+        utc_time = nmea_record['utc_time']
+        gnss_record = {
+            "utc_time": utc_time.strftime("%H:%M:%S") if utc_time else None,
+            "status": nmea_record['status'],
+            "overall": {"top4_cn": None, "sats": []},
+        }
+
+        all_sats = []
+
+        for mode in gnss_modes:
+            mode_key = f"{mode}_gsv"
+            mode_sats = nmea_record.get(mode_key, [])
+            top4_cn, sats = calculate_top4_cn(mode_sats)
+            gnss_record[mode_key] = {"top4_cn": top4_cn, "sats": sats}
+
+            # 收集所有卫星用于计算总体 top4
+            all_sats.extend(
+                {"prn": s["prn"], "snr": s["snr"], "constellation": mode}
+                for s in mode_sats if s.get("snr") is not None
+            )
+
+        # 计算总体 top4
+        overall_top4_cn, overall_sats = calculate_top4_cn(
+            all_sats, include_constellation=True
+        )
+        gnss_record["overall"]["top4_cn"] = overall_top4_cn
+        gnss_record["overall"]["sats"] = overall_sats
+
+        gnss_records.append(gnss_record)
+
+    logger.debug(f"转换得到 {len(gnss_records)} 条 GNSS 信息记录")
+    return gnss_records
 
 
 def calculate_top4_cn(
@@ -434,8 +445,8 @@ def calculate_top4_cn(
         return None, []
 
     top4_sats = sorted(valid_sats, key=lambda x: x['snr'], reverse=True)[:4]
-    # top4_cn = round(sum(s['snr'] for s in top4_sats) / 4, 2)
-    top4_cn = sum(s['snr'] for s in top4_sats) / 4
+    top4_cn = round(sum(s['snr'] for s in top4_sats) / 4, 2)
+    # top4_cn = sum(s['snr'] for s in top4_sats) / 4
 
     if include_constellation:
         result_sats = [

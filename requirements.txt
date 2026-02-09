@@ -2,5 +2,8 @@ pyvisa
 openpyxl
 pyyaml
 uiautomator2
+uiautodev
 pynmea2
 pytest
+dash
+plotly

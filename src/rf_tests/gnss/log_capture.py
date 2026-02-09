@@ -1,8 +1,6 @@
 import re
 import shlex
-from datetime import datetime
 from pathlib import Path
-from typing import Optional, Literal
 
 from src.instruments.zepp_tool import ZeppTool
 from src.utils.logger import get_logger
@@ -14,20 +12,13 @@ class GNSSLogCapture:
     """
     数据采集器，操作 APP 导出 Terminal log 或者 NMEA log 到手机
     """
-    LOG_FILENAME_PATTERNS = {
-        "terminal": re.compile(
-            r'TERM-'
-            r'(?P<year>\d{4})\.(?P<month>\d{2})\.(?P<day>\d{2})-'
-            r'(?P<hour>\d{2})(?P<minute>\d{2})(?P<second>\d{2})'
-            r'\.log$'
-        ),
-        "nmea": re.compile(
-            r'NMEA-'
-            r'(?P<year>\d{4})\.(?P<month>\d{2})\.(?P<day>\d{2})-'
-            r'(?P<hour>\d{2})(?P<minute>\d{2})(?P<second>\d{2})'
-            r'\.txt$'
-        )
-    }
+    TERM_PATTERN = re.compile(
+        r'TERM-\d{4}\.\d{2}\.\d{2}-\d{2}\d{2}\d{2}\.log$'
+    )
+    NMEA_PATTERN = re.compile(
+        r'NMEA-\d{4}\.\d{2}\.\d{2}-\d{2}\d{2}\d{2}\.txt$'
+    )
+
 
     def __init__(
             self,
@@ -37,69 +28,63 @@ class GNSSLogCapture:
     ):
         self._zt = zepp_tool
         self._local_log_dir = Path(local_log_dir)
-        self._device_log_dir = device_log_dir
+        self._device_log_dir = Path(device_log_dir)
 
         self._local_log_dir.mkdir(parents=True, exist_ok=True)
         logger.info(f"日志采集器初始化完成，本地目录: {self._local_log_dir}")
 
-    def capture_terminal_log(
+    def capture_term_log(
             self,
-            rename_prefix: str = "",
-            start_time: Optional[datetime] = None
-    ) -> Optional[str]:
-        """
-
-        :param rename_prefix:
-        :param start_time: 如果 start_time 为 None，则查找最新的 log 文件，否则查找 start_time 之后的第一个 log 文件
-        :return:
-        """
-        if not self._zt.export_terminal_log():
+            term_repl: str = r"\g<0>",
+            since_ts: int | None = None
+    ) -> str | None:
+        if not self._zt.export_term_log():
             logger.error("导出 Terminal 日志失败")
             return None
 
         return self._capture_log(
+            pattern=self.TERM_PATTERN,
             pattern_type="terminal",
-            rename_prefix=rename_prefix,
-            start_time=start_time
+            repl=term_repl,
+            since_ts=since_ts
         )
 
     def capture_nmea_log(
             self,
-            rename_prefix: str = "",
-            start_time: Optional[datetime] = None
-    ) -> Optional[str]:
+            nmea_repl: str = r"\g<0>",
+            since_ts: int | None = None
+    ) -> str | None:
         return self._capture_log(
+            pattern=self.NMEA_PATTERN,
             pattern_type="nmea",
-            rename_prefix=rename_prefix,
-            start_time=start_time
+            repl=nmea_repl,
+            since_ts=since_ts
         )
 
-    # TODO 使用正则表达式匹配
     def _capture_log(
             self,
-            pattern: str,
+            pattern: re.Pattern,
+            pattern_type: str,
             repl: str,
-            pattern_type: Literal["terminal", "nmea"],
-            rename_prefix: str = "",
-            start_time: Optional[datetime] = None
-    ) -> Optional[str]:
+            since_ts: int | None = None
+    ) -> str | None:
         """
 
-        :param pattern_type:
-        :param rename_prefix: 原始文件名字的基础上增加前缀，比如 rename_prefix = "positioning-1-"，
-        原始文件为TERM-2025.11.15-163254.log，则导出的文件为 positioning-1-TERM-2025.11.15-163254.log
-        :param start_time: 如果 start_time 为 None，则查找最新的 log 文件，否则查找 start_time 之后的第一个 log 文件
+        :param pattern: 匹配原文件名的正则表达式
+        :param pattern_type: 文件类型
+        :param repl:
+        :param since_ts: 单位为秒，如果 since_ts 为 None，则查找最新的 log 文件，否则查找 since_ts 之后的第一个 log 文件
         :return:
         """
         # 查找日志文件
-        latest_log = self._find_latest_log(pattern_type=pattern_type, start_time=start_time)
+        latest_log = self._find_latest_log(pattern=pattern, since_ts=since_ts)
         if not latest_log:
             logger.error(f"未找到 {pattern_type} 类型的日志文件")
             return None
 
         # 构建路径
         device_path = f"{self._device_log_dir}/{latest_log}"
-        local_filename = f"{rename_prefix}{latest_log}"
+        local_filename = pattern.sub(repl, latest_log)
         local_path = str(self._local_log_dir / local_filename)
 
         # 拉取文件
@@ -112,13 +97,13 @@ class GNSSLogCapture:
 
     def _find_latest_log(
             self,
-            pattern_type: Literal["terminal", "nmea"],
-            start_time: Optional[datetime] = None
-    ) -> Optional[str]:
+            pattern: re.Pattern,
+            since_ts: int | None = None
+    ) -> str | None:
         """
-
-        :param pattern_type: 匹配文件类型，terminal 或 nmea
-        :param start_time: 如果 start_time 为 None，则查找最新的 log 文件，否则查找 start_time 之后的第一个 log 文件
+        根据文件修改时间查找最新的文件
+        :param pattern: 匹配文件名的正则表达式
+        :param since_ts: 单位为秒，如果 since_ts 为 None，则查找最新的 log 文件，否则查找 since_ts 之后的第一个 log 文件
         :return:
         """
         output = self._zt.shell(f'ls -1 {self._device_log_dir}')
@@ -128,7 +113,7 @@ class GNSSLogCapture:
 
         valid_logs = []
         for filename in files:
-            match = self.LOG_FILENAME_PATTERNS[pattern_type].match(filename)
+            match = pattern.match(filename)
             if not match:
                 continue
 
@@ -142,29 +127,16 @@ class GNSSLogCapture:
 
             valid_logs.append((mtime, filename))
 
-            try:
-                dt = datetime(
-                    int(match.group('year')),
-                    int(match.group('month')),
-                    int(match.group('day')),
-                    int(match.group('hour')),
-                    int(match.group('minute')),
-                    int(match.group('second'))
-                )
-                valid_logs.append((dt, filename))
-            except ValueError:
-                continue
-
         if not valid_logs:
             return None
 
-        if start_time is None:
+        if since_ts is None:
             latest_log = max(valid_logs, key=lambda x: x[0])[1]
             return latest_log
         else:
             valid_logs.sort(key=lambda x: x[0])
-            for dt, filename in valid_logs:
-                if dt >= start_time:
+            for ts, filename in valid_logs:
+                if ts >= since_ts:
                     return filename
             return None
 

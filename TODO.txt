@@ -1,9 +1,52 @@
-gnss_desense.yaml
-1，reboot_scan_time 逻辑修复
-2，start_cmd 和 end_cmd 修改为列表结构
-
-gnss_reporter.py
-1，验证 json 文件格式
-2，验证 jsonl 文件格式
-3，增加 plotly 文件结构
-4，excel 文件格式优先级低
+lux-rf-test/
+├── config/
+│   ├── test_cases/
+│   │   ├── bluetooth_spurious.yaml     后期再说
+│   │   └── gnss_desense.yaml           1，reboot_scan_time 逻辑修复； 2，start_cmd 和 end_cmd 修改为列表结构
+│   └── instruments.yaml                后期再说
+├── scripts/
+│   ├── run_bt_spurious_test.py         后期再说
+│   └── run_gnss_desense_test.py        需要详细检查
+├── src/
+│   ├── core/
+│   │   ├── __init__.py
+│   │   ├── base_instrument.py          后期再说，Pyvisa 构建，需要详细检查代码
+│   │   ├── base_test.py                所有 Test 待基类，需要检查
+│   │   └── exceptions.py               看下是否需要增加或者修改
+│   ├── instruments/
+│   │   ├── __init__.py
+│   │   ├── n9020a.py                   后期再说，继续完善
+│   │   └── zepp_tool.py                OK
+│   ├── reporters/
+│   │   ├── __init__.py
+│   │   ├── base_reporter.py            OK
+│   │   ├── excel_reporter.py           考虑是否删除
+│   │   └── gnss_reporter.py            1，验证 json 文件格式；  2，验证 jsonl 文件格式；  3，增加 plotly 文件结构；  4，excel 文件格式优先级低
+│   ├── rf_tests/
+│   │   ├── bluetooth/
+│   │   │   ├── __init__.py
+│   │   │   └── spurious_test.py        后期再说
+│   │   ├── gnss/
+│   │   │   ├── __init__.py
+│   │   │   ├── desense_test.py         OK
+│   │   │   ├── log_capture.py          Pending Test
+│   │   │   └── log_parser.py           OK，待验证。遗留问题：convert_nmea_records_to_gnss_records 和 convert_term_records_to_gnss_records 方法合并
+│   │   └── __init__.py
+│   ├── utils/
+│   │   ├── __init__.py
+│   │   ├── config_loader.py            OK
+│   │   ├── logger.py                   OK，检查logger的配置
+│   │   └── time_utils.py               OK
+│   └── __init__.py
+├── tests/
+│   ├── test_gnss/
+│   │   ├── data/
+│   │   │   └── nmea_sample.txt
+│   │   └── test_log_parser.py
+│   ├── test_instruments/
+│   │   └── t_zepp_tool.py
+│   ├── test_utils/
+│       └── test_config_loader.py
+├── README.md
+├── main.py
+└── requirements.txt

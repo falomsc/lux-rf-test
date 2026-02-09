@@ -12,14 +12,17 @@ device:
 # 测试参数
 test_params:
   pos_scan_interval: 30          # 定位扫描间隔（秒）
+  pos_scan_max_attempt: 20
   term_log_interval: 60          # terminal log导出间隔（秒）
   reboot_scan_time: 60                # 重启等待时间（秒）
+  reboot_max_attempt: 10
   output_dir: "./output/gnss_desense/results/{timestamp}"
 
 # GNSS 定位重启命令
-gnss_open_cmd: "hm:gnss+proc=open"
-read_auto_cmd: "hm:gnss+proc=read_auto"
-reboot_cmd: "hm:sft+power=reboot"
+generic_commands:
+  gnss_open_cmd: "hm:gnss+proc=open"
+  read_auto_cmd: "hm:gnss+proc=read_auto"
+  reboot_cmd: "hm:sft+power=reboot"
 
 # 测试的GNSS模式: gps, bds, gal, gln
 gnss_modes:
@@ -35,11 +38,11 @@ log_formats:
   - dashboard
 
 # 测试用例定义
-testing_cases:
+test_cases:
   black_screen:
     description: "黑屏状态下的GNSS性能测试"
-    start_cmd: []
-    end_cmd: []
+    start_cmds: []
+    end_cmds: []
     start_delay: 20
     need_reboot: false
     duration: 30
@@ -48,10 +51,10 @@ testing_cases:
 
   white_screen:
     description: "白屏最大亮度下的GNSS性能测试"
-    start_cmd:
+    start_cmds:
       - "hm:ht+cmd=ht,lcd,brightness,level:100"
       - "hm:ht+cmd=ht,lcd,show,color:16777215"
-    end_cmd: []
+    end_cmds: []
     start_delay: 0
     need_reboot: false
     duration: 30
@@ -60,9 +63,9 @@ testing_cases:
 
   watch_face:
     description: "表盘秒针刷新时的GNSS性能测试"
-    start_cmd:
+    start_cmds:
       - "hm:ht+cmd=ht,ui,seconds,switch:on"
-    end_cmd:
+    end_cmds:
       - "hm:ht+cmd=ht,ui,seconds,switch:off"
     start_delay: 0
     need_reboot: false
@@ -72,9 +75,9 @@ testing_cases:
 
   screen_refresh:
     description: "屏幕高刷新率下的GNSS性能测试"
-    start_cmd:
+    start_cmds:
       - "hm:ht+cmd=ht,lcd,refresh,time:50"
-    end_cmd: []
+    end_cmds: []
     start_delay: 0
     need_reboot: true
     duration: 30
@@ -83,9 +86,9 @@ testing_cases:
 
   motor:
     description: "马达振动时的GNSS性能测试"
-    start_cmd:
+    start_cmds:
       - "hm:ht+cmd=ht,motor,start"
-    end_cmd:
+    end_cmds:
       - "hm:ht+cmd=ht,motor,stop"
     start_delay: 0
     need_reboot: false
@@ -95,9 +98,9 @@ testing_cases:
 
   psram:
     description: "PSRAM读写时的GNSS性能测试"
-    start_cmd:
+    start_cmds:
       - "hm:ht+cmd=ht,storage,start,type:psram"
-    end_cmd:
+    end_cmds:
       - "hm:ht+cmd=ht,storage,stop,type:psram"
     start_delay: 0
     need_reboot: true
@@ -107,9 +110,9 @@ testing_cases:
 
   emmc:
     description: "eMMC读写时的GNSS性能测试"
-    start_cmd:
+    start_cmds:
       - "hm:ht+cmd=ht,storage,start,type:emmc"
-    end_cmd:
+    end_cmds:
       - "hm:ht+cmd=ht,storage,stop,type:emmc"
     start_delay: 0
     need_reboot: true
@@ -119,9 +122,9 @@ testing_cases:
 
   norflash:
     description: "NOR Flash读写时的GNSS性能测试"
-    start_cmd:
+    start_cmds:
       - "hm:ht+cmd=ht,storage,start,type:norflash"
-    end_cmd:
+    end_cmds:
       - "hm:ht+cmd=ht,storage,stop,type:norflash"
     start_delay: 0
     need_reboot: true
@@ -131,10 +134,10 @@ testing_cases:
 
   ppg:
     description: "PPG传感器工作时的GNSS性能测试"
-    start_cmd:
+    start_cmds:
       - "hm:ht+cmd=ht,sensor,set,type:ppg,caloff:1,curr:200,dac:0"
       - "hm:ht+cmd=ht,sensor,enable,type:ppg"
-    end_cmd:
+    end_cmds:
       - "hm:ht+cmd=ht,sensor,disable,type:ppg"
     start_delay: 0
     need_reboot: false
@@ -144,9 +147,9 @@ testing_cases:
 
   audio:
     description: "音频播放时的GNSS性能测试"
-    start_cmd:
+    start_cmds:
       - "hm:ht+cmd=ht,audio,start,name:/system/audio/Hwtest.mp3,vol:90"
-    end_cmd:
+    end_cmds:
       - "hm:ht+cmd=ht,audio,stop,name:/system/audio/Hwtest.mp3,vol:90"
     start_delay: 0
     need_reboot: false
@@ -156,9 +159,9 @@ testing_cases:
 
   mic:
     description: "麦克风录音时的GNSS性能测试"
-    start_cmd:
+    start_cmds:
       - "hm:ht+cmd=ht,mic,start"
-    end_cmd:
+    end_cmds:
       - "hm:ht+cmd=ht,mic,stop"
     start_delay: 0
     need_reboot: false

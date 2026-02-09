@@ -1,10 +1,13 @@
+"""
+对应版本 Zepp Tool 3.6.15 normal
+"""
 import time
 from typing import Optional
 
 import uiautomator2 as u2
 
 from src.core.exceptions import InstrumentError
-from src.utils.logger import get_logger
+from src.utils.logger import get_logger, setup_logger
 
 logger = get_logger()
 
@@ -22,7 +25,7 @@ class ZeppTool:
     UI_DATA_COLLECT = "数据采集"
     UI_BASIC_INFO = "基本信息展示"
     UI_SELF_TEST = "自检工具"
-    UI_SELF_TERMINAL = "自检终端"
+    UI_SELF_TERM = "自检终端"
     UI_SWITCH_MODE = "切换用户模式"
     UI_CANCEL = "取消"
     UI_OK = "好的"
@@ -69,13 +72,13 @@ class ZeppTool:
     def _delay(self, seconds: Optional[float] = None) -> None:
         time.sleep(seconds or self._operation_delay)
 
-    def _is_in_terminal(self) -> bool:
+    def _is_in_term(self) -> bool:
         return self.d(text=self.UI_SEND_BUTTON).exists(timeout=2)
 
-    def _is_in_data_collector(self) -> bool:
+    def _is_in_dc(self) -> bool:
         return self.d(text=self.UI_START_COLLECT).exists(timeout=2)
 
-    def _navigate_to_terminal(self) -> bool:
+    def _dc2term(self) -> bool:
         """
         从 Data Collector 导航到 Terminal 界面
         """
@@ -84,7 +87,7 @@ class ZeppTool:
             self._delay()
 
             # 点击左上角菜单
-            self.d.xpath('//*[contains(@text, "Cologne")]/preceding-sibling::*[1]').click()  # 左上角三条横线
+            self.d.click(70, 218)  # 左上角三条横线，定位方式待优化
             self._delay()
 
             self.d(text=self.UI_BASIC_INFO).click()
@@ -97,7 +100,7 @@ class ZeppTool:
             self.d(text=self.UI_SELF_TEST).click()
             self._delay()
 
-            self.d(text=self.UI_SELF_TERMINAL).click()
+            self.d(text=self.UI_SELF_TERM).click()
             self._delay()
 
             logger.debug("已导航到 Terminal 界面")
@@ -106,7 +109,7 @@ class ZeppTool:
             logger.error(f"导航到 Terminal 失败: {e}")
             return False
 
-    def _navigate_to_data_collector(self) -> bool:
+    def _term2dc(self) -> bool:
         """
         从 Terminal 导航到 Data Collector 界面
         """
@@ -114,7 +117,7 @@ class ZeppTool:
             self.d.press("back")
             self._delay()
 
-            self.d.xpath('//*[contains(@text, "Cologne")]/preceding-sibling::*[1]').click()  # 点击左上角菜单
+            self.d.click(70, 218)  # 左上角三条横线，定位方式待优化
             self._delay()
 
             self.d(text=self.UI_DATA_COLLECT).click()
@@ -154,10 +157,10 @@ class ZeppTool:
         if not cmd:
             return True
 
-        if self._is_in_terminal():
+        if self._is_in_term():
             pass
-        elif self._is_in_data_collector():
-            self._navigate_to_terminal()
+        elif self._is_in_dc():
+            self._dc2term()
         else:
             logger.error("无法进入 Terminal 界面")
             return False
@@ -175,7 +178,7 @@ class ZeppTool:
             logger.error(f"发送命令失败: {e}")
             return False
 
-    def send_commands(self, commands: str | list[str], delay: int | float) -> bool:
+    def send_commands(self, commands: str | list[str], delay: int | float = 1) -> bool:
         """
         批量发送命令
         :param commands:
@@ -194,14 +197,14 @@ class ZeppTool:
                 time.sleep(delay)
         return True
 
-    def export_terminal_log(self) -> bool:
+    def export_term_log(self) -> bool:
         """
         导出 Terminal 日志，会自动从 Data Collector 界面切换到 Terminal 界面
         """
-        if self._is_in_terminal():
+        if self._is_in_term():
             pass
-        elif self._is_in_data_collector():
-            self._navigate_to_terminal()
+        elif self._is_in_dc():
+            self._dc2term()
         else:
             logger.error("无法进入 Terminal 界面")
             return False
@@ -224,10 +227,10 @@ class ZeppTool:
         采集 NMEA 数据，会自动从 Terminal 界面切换到 Data Collector 界面
         """
 
-        if self._is_in_data_collector():
+        if self._is_in_dc():
             pass
-        elif self._is_in_terminal():
-            self._navigate_to_data_collector()
+        elif self._is_in_term():
+            self._term2dc()
         else:
             logger.error("无法进入 Data Collector 界面")
             return False
@@ -265,3 +268,16 @@ class ZeppTool:
         """
         result = self.d.shell(command)
         return result.output.strip()
+
+    def is_term_connected(self):
+        return self.d(textContains="已连接").exists
+
+if __name__ == '__main__':
+    logger = setup_logger()
+    zt = ZeppTool("bdb12599")
+    zt.connect()
+    # zt._dc2term()
+    # zt._term2dc()
+    # print(zt._is_in_dc())
+    # print(zt._is_in_term())
+    print(zt.is_term_connected())

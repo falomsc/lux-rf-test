@@ -9,7 +9,6 @@ logger = get_logger()
 
 class GNSSReporter(BaseReporter):
     """GNSS 测试报告生成器"""
-    # TODO 更新 excel 和 dashboard 方法
     def __init__(self, output_dir: str):
         super().__init__(output_dir)
         self._output_path = Path(output_dir)
