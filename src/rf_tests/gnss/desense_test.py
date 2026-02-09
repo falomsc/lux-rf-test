@@ -98,7 +98,7 @@ class GNSSDesenseTest(BaseTest):
         # 运行时对象
         self._zt: ZeppTool | None = None
         self._log_capture: GNSSLogCapture | None = None
-        self._results: dict[str, list[dict]] = {}
+        self._gnss_results: dict[str, list[dict]] = {}
         self._need_reboot = False
         self._case_running_num = 0
 
@@ -142,7 +142,7 @@ class GNSSDesenseTest(BaseTest):
         total_duration = time.perf_counter() - total_start
         logger.info(f"测试总耗时: {format_duration(total_duration)}")
 
-        return self._results
+        return self._gnss_results
 
     def _open_gnss(self):
         self._zt.send_command(self.gnss_open_cmd)
@@ -241,10 +241,10 @@ class GNSSDesenseTest(BaseTest):
                 gnss_records = convert_nmea_records_to_gnss_records(nmea_data, gnss_modes=self.gnss_modes)
             else:
                 gnss_records = []
-            self._results[case.name] = gnss_records
+            self._gnss_results[case.name] = gnss_records
 
             # 7，输出测试结果
-            result = DesenseTestResult(
+            gnss_result = DesenseTestResult(
                 case_name=case.name,
                 gnss_records=gnss_records,
                 start_time=start_time,
@@ -253,7 +253,7 @@ class GNSSDesenseTest(BaseTest):
             )
             self._case_running_num += 1
             logger.info(f"{self._case_running_num}，测试完成: {case.name}，采集到 {len(gnss_records)} 条记录")
-            return result
+            return gnss_result
 
         except Exception as e:
             self._case_running_num += 1
@@ -281,11 +281,6 @@ class GNSSDesenseTest(BaseTest):
             if reboot_attempt > self.reboot_max_attempt:
                 logger.warning("设备重启失败")
                 raise RebootMaxAttemptError
-
-
-    def get_results(self) -> dict[str, list[dict]]:
-        """获取测试结果"""
-        return self._results
 
     @property
     def session_log_dir(self) -> Path:

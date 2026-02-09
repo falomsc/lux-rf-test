@@ -32,10 +32,16 @@ gnss_modes:
   - gln
 
 # 日志导出格式: json, xlsx, dashboard
-log_formats:
-  - json
-  - xlsx
-  - dashboard
+log_config:
+  log_formats:
+    - json
+    - xlsx
+    - dashboard
+  json_filename: "gnss_desense_result.json"
+  xlsx_filename: "gnss_desense_result.xlsx"
+  dashboard_filename: "gnss_desense_result.html"
+  dashboard_auto_open: true
+  dashboard_address: "http://127.0.0.1:8080"
 
 # 测试用例定义
 test_cases:

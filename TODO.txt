@@ -2,11 +2,11 @@ lux-rf-test/
 ├── config/
 │   ├── test_cases/
 │   │   ├── bluetooth_spurious.yaml     后期再说
-│   │   └── gnss_desense.yaml           1，reboot_scan_time 逻辑修复； 2，start_cmd 和 end_cmd 修改为列表结构
+│   │   └── gnss_desense.yaml           OK
 │   └── instruments.yaml                后期再说
 ├── scripts/
 │   ├── run_bt_spurious_test.py         后期再说
-│   └── run_gnss_desense_test.py        需要详细检查
+│   └── run_gnss_desense_test.py        OK
 ├── src/
 │   ├── core/
 │   │   ├── __init__.py
@@ -20,8 +20,7 @@ lux-rf-test/
 │   ├── reporters/
 │   │   ├── __init__.py
 │   │   ├── base_reporter.py            OK
-│   │   ├── excel_reporter.py           考虑是否删除
-│   │   └── gnss_reporter.py            1，验证 json 文件格式；  2，验证 jsonl 文件格式；  3，增加 plotly 文件结构；  4，excel 文件格式优先级低
+│   │   └── gnss_reporter.py            json OK, dashboard 求平均值的函数能否独立出来, excel 待重新编写
 │   ├── rf_tests/
 │   │   ├── bluetooth/
 │   │   │   ├── __init__.py

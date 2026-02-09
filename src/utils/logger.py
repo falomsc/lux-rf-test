@@ -1,12 +1,13 @@
 import logging
 import os
 from datetime import datetime
+from pathlib import Path
 
 
 def setup_logger(
     name: str = "rf_test",
-    log_dir: str = "output/logs",
-    level: int = logging.INFO
+    log_dir: str | Path = "output/logs",
+    level: int | str = logging.INFO
 ) -> logging.Logger:
     """设置日志器"""
     os.makedirs(log_dir, exist_ok=True)

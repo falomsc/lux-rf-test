@@ -5,7 +5,6 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.rf_tests.bluetooth.spurious_test import BluetoothSpuriousTest
-from src.reporters.excel_reporter import ExcelReporter
 from src.utils.config_loader import load_config
 from src.utils.logger import setup_logger
 

@@ -27,18 +27,9 @@ class BaseTest(ABC):
     def test_name(self) -> str:
         return self._test_name
 
-    def set_reporter(self, reporter: BaseReporter) -> None:
-        """设置报告生成器"""
-        self.reporter = reporter
-
     @abstractmethod
     def setup(self) -> None:
         """测试准备 - 子类实现"""
-        pass
-
-    @abstractmethod
-    def execute(self) -> None:
-        """执行测试 - 子类实现"""
         pass
 
     @abstractmethod

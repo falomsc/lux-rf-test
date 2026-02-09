@@ -78,7 +78,7 @@ class ZeppTool:
     def _is_in_dc(self) -> bool:
         return self.d(text=self.UI_START_COLLECT).exists(timeout=2)
 
-    def _dc2term(self) -> bool:
+    def _dc_to_term(self) -> bool:
         """
         从 Data Collector 导航到 Terminal 界面
         """
@@ -109,7 +109,7 @@ class ZeppTool:
             logger.error(f"导航到 Terminal 失败: {e}")
             return False
 
-    def _term2dc(self) -> bool:
+    def _term_to_dc(self) -> bool:
         """
         从 Terminal 导航到 Data Collector 界面
         """
@@ -160,7 +160,7 @@ class ZeppTool:
         if self._is_in_term():
             pass
         elif self._is_in_dc():
-            self._dc2term()
+            self._dc_to_term()
         else:
             logger.error("无法进入 Terminal 界面")
             return False
@@ -204,7 +204,7 @@ class ZeppTool:
         if self._is_in_term():
             pass
         elif self._is_in_dc():
-            self._dc2term()
+            self._dc_to_term()
         else:
             logger.error("无法进入 Terminal 界面")
             return False
@@ -230,7 +230,7 @@ class ZeppTool:
         if self._is_in_dc():
             pass
         elif self._is_in_term():
-            self._term2dc()
+            self._term_to_dc()
         else:
             logger.error("无法进入 Data Collector 界面")
             return False
