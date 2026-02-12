@@ -1,13 +1,15 @@
+from __future__ import annotations
+
 import json
-import re
 import shutil
 from pathlib import Path
+from typing import Any
 
 import dash
 import plotly.graph_objects as go
 from dash import dcc, html, dash_table, Input, Output, ctx
 from openpyxl import Workbook
-from openpyxl.styles import Alignment
+from openpyxl.styles import Alignment, Font, PatternFill, Border, Side
 from openpyxl.utils import get_column_letter
 
 from src.reporters.base_reporter import BaseReporter
@@ -101,36 +103,126 @@ class GNSSReporter(BaseReporter):
             gnss_results: dict[str, list[dict]],
             filename: str
     ) -> str:
-        excel_path = self._output_path / filename
-        headers = []
-        for key in gnss_results[next(iter(gnss_results))][0].keys():
-            if re.search("_gsv", key):
-                for i in range(4):
-                    headers.append(f"{key}{i + 1}")
+        """
+
+        :param gnss_results:
+        :param filename:
+        :return:
+        """
+        def format_sat(sat: dict | None) -> str | None:
+            """格式化卫星信息为可读文本."""
+            if not sat:
+                return None
+            prn = sat.get("prn")
+            snr = sat.get("snr")
+            const = sat.get("constellation")
+            label = f"{const} {prn}" if const else (str(prn) if prn is not None else "")
+            if snr is None:
+                return label or None
+            if label:
+                return f"{label} ({snr})"
+            return f"{snr}"
+
+        def display_len(v: Any) -> int:
+            if v is None:
+                return 0
+            if isinstance(v, float):
+                s = f"{v:.2f}"
             else:
-                headers.append(key)
-        CENTER = Alignment(horizontal="center", vertical="center")
+                s = str(v)
+            return len(s)
+
+        excel_path = self._output_path / filename
+        # 1) 构建列描述（从第一个sheet的第一条记录推断）
+        first_sheet = next(iter(gnss_results.values()))
+        if not first_sheet:
+            # 没有数据时也创建空文件
+            wb = Workbook()
+            wb.save(excel_path)
+            return str(excel_path)
+
+        sample_rec = first_sheet[0]
+        columns: list[tuple[str, tuple]] = []
+        # [('utc_time', ('plain', 'utc_time')), ('status', ('plain', 'status')),
+        # ('overall_top4_cn', ('top4', 'overall')),
+        # ('overall_gsv1', ('sat', 'overall', 0)), ('overall_gsv2', ('sat', 'overall', 1)), ('overall_gsv3', ('sat', 'overall', 2)), ('overall_gsv4', ('sat', 'overall', 3)),
+        # ('gps_top4_cn', ('top4', 'gps_gsv')),
+        # ('gps_gsv1', ('sat', 'gps_gsv', 0)), ('gps_gsv2', ('sat', 'gps_gsv', 1)), ('gps_gsv3', ('sat', 'gps_gsv', 2)), ('gps_gsv4', ('sat', 'gps_gsv', 3)),
+        # ('bds_top4_cn', ('top4', 'bds_gsv')),
+        # ('bds_gsv1', ('sat', 'bds_gsv', 0)), ('bds_gsv2', ('sat', 'bds_gsv', 1)), ('bds_gsv3', ('sat', 'bds_gsv', 2)), ('bds_gsv4', ('sat', 'bds_gsv', 3)),
+        # ('gln_top4_cn', ('top4', 'gln_gsv')),
+        # ('gln_gsv1', ('sat', 'gln_gsv', 0)), ('gln_gsv2', ('sat', 'gln_gsv', 1)), ('gln_gsv3', ('sat', 'gln_gsv', 2)), ('gln_gsv4', ('sat', 'gln_gsv', 3))]
+        for key in sample_rec.keys():
+            if key.endswith("_gsv") or key == "overall":
+                base = key.replace("_gsv", "")
+                columns.append((f"{base}_top4_cn", ("top4", key)))
+                for i in range(4):
+                    columns.append((f"{base}_gsv{i + 1}", ("sat", key, i)))
+            else:
+                columns.append((key, ("plain", key)))
+
+        # 2) 样式
+        center = Alignment(horizontal="center", vertical="center")
+        header_font = Font(bold=True, color="FFFFFF")
+        header_fill = PatternFill("solid", fgColor="4F81BD")
+        thin = Side(style="thin", color="D9D9D9")
+        border = Border(top=thin, left=thin, right=thin, bottom=thin)
+
+        # 3) 生成工作簿
         wb = Workbook()
         wb.remove(wb.active)
+
         for sheet_name, records in gnss_results.items():
             ws = wb.create_sheet(sheet_name)
-            for col, header in enumerate(headers, 1):
-                cell = ws.cell(row=1, column=col, value=header)
-                cell.alignment = CENTER
-            for r_idx, rec in enumerate(records, start=2):
-                gnss_values = []
-                for k, v in rec.items():
-                    if re.search("_gsv_info", k):
-                        for i in range(4):
-                            gnss_values.append(f"{v[i][0]}, {v[i][1]}")
-                    else:
-                        gnss_values.append(v)
-                for c_idx, val in enumerate(gnss_values, 1):
-                    cell = ws.cell(row=r_idx, column=c_idx, value=val)
-                    cell.alignment = CENTER
-            for col in ws.columns:
-                max_len = max(len(str(c.value)) if c.value else 0 for c in col)
-                ws.column_dimensions[get_column_letter(col[0].column)].width = max_len + 2
+
+            # 表头
+            col_widths = [0] * len(columns)  # 列宽
+            for col_idx, (header, _) in enumerate(columns, start=1):
+                cell = ws.cell(row=1, column=col_idx, value=header)
+                cell.alignment = center
+                cell.font = header_font
+                cell.fill = header_fill
+                cell.border = border
+                col_widths[col_idx - 1] = display_len(header)
+
+            # 数据行
+            for row_idx, rec in enumerate(records, start=2):
+                for col_idx, (_, spec) in enumerate(columns, start=1):
+                    kind = spec[0]
+                    key = spec[1]
+
+                    if kind == "plain":
+                        val = rec.get(key)
+                    elif kind == "top4":
+                        block = rec.get(key) or {}
+                        val = block.get("top4_cn")
+                    else:  # "sat"
+                        block = rec.get(key) or {}
+                        sats = block.get("sats") or []
+                        i = spec[2]
+                        sat = sats[i] if i < len(sats) else None
+                        val = format_sat(sat)
+
+                    cell = ws.cell(row=row_idx, column=col_idx, value=val)
+                    cell.alignment = center
+                    cell.border = border
+
+                    # # top4_cn 两位小数格式
+                    # if kind == "top4" and isinstance(val, (int, float)):
+                    #     cell.number_format = "0.00"
+
+                    # 记录列宽
+                    col_widths[col_idx - 1] = max(col_widths[col_idx - 1], display_len(val))
+
+            # 冻结首行 + 自动筛选
+            ws.freeze_panes = "A2"
+            # last_col = get_column_letter(len(columns))
+            # last_row = max(1, len(records) + 1)
+
+            # 设置列宽（限制最大宽度避免过宽）
+            for i, w in enumerate(col_widths, start=1):
+                ws.column_dimensions[get_column_letter(i)].width = min(w + 2, 40)
+
         wb.save(excel_path)
         return str(excel_path)
 
@@ -309,7 +401,6 @@ class GNSSReporter(BaseReporter):
         # ══════════════════════════════════════════════════════════
         def _save_report():
             import json as _json
-            import os
             import plotly.io as pio
 
             # ---- pre-compute all data ----

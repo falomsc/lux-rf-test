@@ -20,7 +20,7 @@ lux-rf-test/
 │   ├── reporters/
 │   │   ├── __init__.py
 │   │   ├── base_reporter.py            OK
-│   │   └── gnss_reporter.py            json OK, dashboard 求平均值的函数能否独立出来, excel 待重新编写
+│   │   └── gnss_reporter.py            json OK, dashboard OK, excel 待重新编写
 │   ├── rf_tests/
 │   │   ├── bluetooth/
 │   │   │   ├── __init__.py
